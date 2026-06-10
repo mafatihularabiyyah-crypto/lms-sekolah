@@ -1,5 +1,7 @@
 "use client";
 
+import { signOut } from "next-auth/react";
+import { LogOut } from "lucide-react"; // Ikon keren untuk pintu keluar
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -111,7 +113,20 @@ export default function Sidebar() {
               <Settings className="w-[18px] h-[18px] text-slate-400" strokeWidth={2} /> Pengaturan Sistem
             </Link>
         </div>
+
+        {/* Tombol Logout (Taruh di area bawah Sidebar) */}
+<div className="p-4 mt-auto border-t border-slate-200">
+  <button 
+    onClick={() => signOut({ callbackUrl: "/login" })}
+    className="flex items-center gap-3 px-4 py-3 w-full text-rose-600 hover:bg-rose-50 hover:text-rose-700 rounded-xl font-bold transition-all group"
+  >
+    <LogOut size={18} className="group-hover:-translate-x-1 transition-transform" />
+    Keluar Sistem
+  </button>
+</div>
       </nav>
+
+
 
       {/* === FOOTER SIDEBAR (Branding Elegan) === */}
       <div className="p-5 border-t border-slate-100 bg-slate-50/50">

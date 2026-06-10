@@ -1,27 +1,33 @@
 import { PrismaClient } from '@prisma/client';
-import { neonConfig } from '@neondatabase/serverless';
-import { PrismaNeon } from '@prisma/adapter-neon';
-import ws from 'ws';
+import { Pool } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
 
-// Mengatur WebSocket untuk Neon Serverless
-neonConfig.webSocketConstructor = ws;
-
-const prismaClientSingleton = () => {
-  const connectionString = `${process.env.DATABASE_URL}`;
-  
-  // PENGUBAHAN: Langsung masukkan connectionString ke dalam PrismaNeon
-  // (Kita melompati inisialisasi "new Pool()" bawaan Neon)
-  const adapter = new PrismaNeon({ connectionString });
-  
-  return new PrismaClient({ adapter });
-};
-
+// Mengamankan tipe data global untuk TypeScript
 declare global {
-  var prismaGlobal: undefined | ReturnType<typeof prismaClientSingleton>;
+  var globalPrisma: PrismaClient | undefined;
+  var globalPgPool: Pool | undefined;
 }
 
-const prisma = globalThis.prismaGlobal ?? prismaClientSingleton();
+const connectionString = `${process.env.DATABASE_URL}`;
+
+// 1. Pastikan Pool PostgreSQL hanya dibuat SATU KALI di memory global (Mencegah Kebocoran)
+if (!globalThis.globalPgPool) {
+  globalThis.globalPgPool = new Pool({ 
+    connectionString,
+    max: 10, // Batasi maksimal 10 koneksi per instance
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 2000,
+  });
+}
+
+// 2. Pasang adapter Prisma menggunakan pool global yang aman
+const adapter = new PrismaPg(globalThis.globalPgPool);
+
+// 3. Inisialisasi Prisma Client secara aman
+const prisma = globalThis.globalPrisma ?? new PrismaClient({ adapter });
+
+if (process.env.NODE_ENV !== 'production') {
+  globalThis.globalPrisma = prisma;
+}
 
 export default prisma;
-
-if (process.env.NODE_ENV !== 'production') globalThis.prismaGlobal = prisma;

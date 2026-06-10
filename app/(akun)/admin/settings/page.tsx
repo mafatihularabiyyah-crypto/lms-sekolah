@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { 
   Building2, UserCircle, ShieldCheck, Camera, 
@@ -12,11 +12,7 @@ import {
 } from "./actions";
 
 export default function SettingsPage() {
-  // PERBAIKAN 1: Ambil 'status' dari useSession
   const { data: session, status } = useSession();
-  
-  // SOLUSI ERROR 1: Kita paksa TypeScript mengenali tipe datanya sebagai 'any' agar bisa membaca 'id'
-  const userId = (session?.user as any)?.id;
 
   const [activeTab, setActiveTab] = useState<"SCHOOL" | "PROFILE" | "SECURITY">("SCHOOL");
   const [isLoading, setIsLoading] = useState(true);
@@ -36,73 +32,108 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
 
-  // PERBAIKAN 2: Pantau 'status', jika sudah tidak loading, paksa loadData berjalan
   useEffect(() => {
-    if (status === "loading") return; // Tunggu sampai NextAuth selesai mengecek sesi
+    if (status === "loading") return; 
     loadData();
-  }, [status, userId]);
+  }, [status]);
 
   const loadData = async () => {
     setIsLoading(true);
-    // PERBAIKAN 3: Jika userId kosong, kirim string kosong agar fungsi tidak error
-    const res = await getSettingsDataDB((userId as string) || "belum_login");
+    const res = await getSettingsDataDB();
     
     if (res?.success && res?.data) {
       setSchoolName(res.data.school?.schoolName || "LMS Pesantren");
       setSchoolLogo(res.data.school?.schoolLogo || "");
       
-      // SOLUSI ERROR 2, 3, 4: Tambahkan tanda tanya (?.) dan nilai default ("") 
-      // untuk berjaga-jaga jika admin bernilai null
       setAdminName(res.data.admin?.name || "");
       setAdminEmail(res.data.admin?.email || "");
       setAdminImage(res.data.admin?.image || "");
     }
     
-    // PERBAIKAN 4: Pastikan loading selalu dimatikan pada akhirnya
     setIsLoading(false);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: any) => {
+  // FUNGSI KOMPRESI GAMBAR (Disesuaikan untuk State Satuan)
+  const handleImageUpload = (
+    e: React.ChangeEvent<HTMLInputElement>, 
+    setTargetState: (val: string) => void // Setter function langsung
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     const reader = new FileReader();
-    reader.onloadend = () => setter(reader.result as string);
     reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        
+        // Kompres ke resolusi maksimal 300x300
+        const MAX_SIZE = 300;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height && width > MAX_SIZE) {
+          height *= MAX_SIZE / width;
+          width = MAX_SIZE;
+        } else if (height > MAX_SIZE) {
+          width *= MAX_SIZE / height;
+          height = MAX_SIZE;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        // Konversi ke JPEG kualitas 70% (Sangat kecil & ringan)
+        const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+        
+        // Update state secara langsung
+        setTargetState(compressedBase64);
+      };
+    };
   };
 
   const handleSaveSchool = async () => {
     setIsSaving(true);
+    // Tidak perlu kirim userId lagi
     const res = await updateSchoolDB({ schoolName, schoolLogo });
     setIsSaving(false);
     
     if (res.success) {
       alert("Data Sekolah berhasil diperbarui!");
-      window.location.reload(); // <--- TAMBAHKAN BARIS INI
+      window.location.reload(); 
     } else {
       alert(res.error);
     }
   };
 
   const handleSaveProfile = async () => {
-    if (!userId) return alert("Anda harus login dengan benar untuk mengubah profil!");
+    if (!session?.user) return alert("Anda harus login dengan benar untuk mengubah profil!");
     setIsSaving(true);
-    const res = await updateAdminProfileDB(userId as string, { name: adminName, email: adminEmail, image: adminImage });
+    // Tidak perlu kirim userId lagi
+    const res = await updateAdminProfileDB({ name: adminName, email: adminEmail, image: adminImage });
     setIsSaving(false);
     
     if (res.success) {
       alert("Profil Admin berhasil diperbarui!");
-      window.location.reload(); // <--- TAMBAHKAN BARIS INI JUGA
+      window.location.reload(); 
     } else {
       alert(res.error);
     }
   };
 
   const handleSavePassword = async () => {
-    if (!userId) return alert("Anda harus login dengan benar untuk mengubah password!");
+    if (!session?.user) return alert("Anda harus login dengan benar untuk mengubah password!");
     if (newPassword.length < 6) return alert("Password baru minimal 6 karakter!");
     setIsSaving(true);
-    const res = await updatePasswordDB(userId as string, oldPassword, newPassword);
+    // Tidak perlu kirim userId lagi
+    const res = await updatePasswordDB(oldPassword, newPassword);
     setIsSaving(false);
+    
     if (res.success) {
       alert("Password berhasil diubah!");
       setOldPassword(""); setNewPassword("");
@@ -139,8 +170,8 @@ export default function SettingsPage() {
               <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2"><Building2 className="text-violet-600"/> Identitas Sekolah & Layout</h3>
               <div className="space-y-6">
                 <div className="flex items-center gap-6">
-                  <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center relative overflow-hidden group">
-                    {schoolLogo ? <img src={schoolLogo} className="w-full h-full object-cover" alt="Logo"/> : <Building2 className="text-slate-300 w-10 h-10"/>}
+                  <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center relative overflow-hidden group shrink-0">
+                    {schoolLogo ? <img src={schoolLogo} className="w-full h-full object-contain" alt="Logo"/> : <Building2 className="text-slate-300 w-10 h-10"/>}
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
                       <Camera className="text-white w-6 h-6"/>
                       <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setSchoolLogo)} className="absolute inset-0 opacity-0 cursor-pointer"/>
@@ -164,7 +195,7 @@ export default function SettingsPage() {
               <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2"><UserCircle className="text-emerald-600"/> Data Diri Admin</h3>
               <div className="space-y-6">
                 <div className="flex items-center gap-6">
-                  <div className="w-24 h-24 rounded-full border-4 border-slate-100 bg-slate-50 flex items-center justify-center relative overflow-hidden group">
+                  <div className="w-24 h-24 rounded-full border-4 border-slate-100 bg-slate-50 flex items-center justify-center relative overflow-hidden group shrink-0">
                     {adminImage ? <img src={adminImage} className="w-full h-full object-cover" alt="Admin"/> : <UserCircle className="text-slate-300 w-12 h-12"/>}
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
                       <Camera className="text-white w-6 h-6"/>

@@ -32,8 +32,9 @@ export default function ManajemenSiswaPage() {
 
   const loadData = async () => {
     setIsLoading(true);
-    const res = await getSiswaDB("admin@sekolah.com");
-    if (res.success && res.data) setStudents(res.data as Siswa[]);
+    // PERBAIKAN 1: Hapus hardcode email, biarkan backend mendeteksinya otomatis
+    const res = await getSiswaDB();
+    if (res?.success && res?.data) setStudents(res.data as Siswa[]);
     setIsLoading(false);
   };
 
@@ -107,7 +108,11 @@ export default function ManajemenSiswaPage() {
     if (modalType === "AKSES") {
       await updateAksesSiswaDB(currentStudent.id, currentStudent.email, currentStudent.password);
     } else {
-      await saveSiswaDB(currentStudent, modalType === "EDIT" ? currentStudent.id : undefined);
+      // PERBAIKAN 2: Hanya kirim currentStudent. Backend akan mengurus sisanya.
+      const res = await saveSiswaDB(currentStudent);
+      if (!res.success) {
+        alert(res.error);
+      }
     }
     await loadData();
   };
@@ -231,7 +236,7 @@ export default function ManajemenSiswaPage() {
                         </div>
                         <div>
                           <label className="text-xs font-bold text-slate-500 mb-1 block">Password Default</label>
-                          <input type="text" placeholder="santri123" value={currentStudent.password || ""} onChange={e => setCurrentStudent({...currentStudent, password: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-sm"/>
+                          <input type="text" placeholder="Sesuai NIS jika kosong" value={currentStudent.password || ""} onChange={e => setCurrentStudent({...currentStudent, password: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-sm"/>
                         </div>
                       </div>
                     </div>

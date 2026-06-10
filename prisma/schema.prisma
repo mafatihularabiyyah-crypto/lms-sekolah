@@ -9,15 +9,22 @@ datasource db {
   provider = "postgresql"
 }
 
-// --- TABEL LMS --- //
+// --- TABEL LMS MULTI-TENANT --- //
 
 model Tenant {
-  id          String   @id @default(cuid())
-  name        String
-  domain      String?  @unique
-  users       User[]
-  courses     Course[]
-  createdAt   DateTime @default(now())
+  id              String           @id @default(cuid())
+  name            String
+  domain          String?          @unique
+  createdAt       DateTime         @default(now())
+
+  // Relasi ke seluruh tabel yang dimiliki oleh Instansi/Sekolah ini
+  users           User[]
+  courses         Course[]
+  studentProfiles StudentProfile[]
+  teacherProfiles TeacherProfile[]
+  classRooms      ClassRoom[]
+  cbtExams        CbtExam[]
+  systemSettings  SystemSettings?
 }
 
 enum Role {
@@ -27,21 +34,22 @@ enum Role {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  image     String?  @db.Text
-  password  String   
-  role      String   @default("ADMIN")
+  id              String           @id @default(cuid())
+  email           String           @unique
+  name            String
+  image           String?          @db.Text
+  password        String   
+  role            String           @default("SANTRI")
+  isActive        Boolean          @default(true)
   
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  tenantId        String
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   
-  courses        Course[]       @relation("CourseTeacher")
-  enrollments    Enrollment[]
-  attendances    Attendance[]
-  studentProfile StudentProfile? 
-  teacherProfile TeacherProfile?
+  courses         Course[]         @relation("CourseTeacher")
+  enrollments     Enrollment[]
+  attendances     Attendance[]
+  studentProfile  StudentProfile? 
+  teacherProfile  TeacherProfile?
 }
 
 model Course {
@@ -50,7 +58,7 @@ model Course {
   description String?
   
   tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   
   teacherId   String
   teacher     User     @relation("CourseTeacher", fields: [teacherId], references: [id])
@@ -135,105 +143,118 @@ enum StudentStatus {
 }
 
 model StudentProfile {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String        @id @default(cuid())
+  userId         String        @unique
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  nis             String   @unique
-  gender          Gender
-  enrollYear      Int
-  parentName      String?
-  parentPhone     String?
-  address         String?
-  birthPlace      String?  // Kolom kesibukan santri
-  status          StudentStatus @default(AKTIF)
+  tenantId       String
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  nis            String        @unique
+  gender         Gender
+  enrollYear     Int
+  parentName     String?
+  parentPhone    String?
+  address        String?
+  birthPlace     String?  
+  status         StudentStatus @default(AKTIF)
 
-  // UBAH BAGIAN INI: Menjadi array agar bisa menampung banyak kelas sekaligus
-  classes         ClassRoom[]  
+  classes        ClassRoom[]  
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 }
 
 model TeacherProfile {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  nip       String?
-  gender    Gender?
-  subject   String?  // Untuk Mata Pelajaran (Spesialisasi)
-  phone     String?
-  address   String?
-  status    String?  @default("Aktif") // Aktif, Cuti, Nonaktif
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model ClassRoom {
-  id              String   @id @default(cuid())
-  name            String   @unique
-  program         String?
-  pengajar        String?
-  jadwal          String?
-  kkm             Int      @default(75)
-  kapasitas       Int      @default(30)
-  isFinished      Boolean  @default(false)
-  
-  // Konfigurasi Tambahan
-  weights         Json?    // Menyimpan bobot { tugas: 20, uts: 30, uas: 50, jmlTugas: 1 }
-  waGroupLink     String?
-  zoomLink        String?
-  certBackground  String?  // Menyimpan gambar background sertifikat (Base64)
-  
-  // Relasi Data
-  students        StudentProfile[]
-  materials       LearningMaterial[]
-  attendances     ClassAttendance[]
-  grades          ClassGrade[]
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-}
-
-model LearningMaterial {
   id          String   @id @default(cuid())
-  classRoomId String
-  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  title       String
-  description String?
-  youtubeLink String?  // Link Video
-  fileUrl     String?  // <--- BARU: Link File PDF / Google Drive / Dokumen
-  isPublished Boolean  @default(true)
-  order       Int      @default(0)
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  nip         String?
+  gender      Gender?
+  subject     String?  
+  phone       String?
+  address     String?
+  status      String?  @default("Aktif") 
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
 
-model CbtExam {
+model ClassRoom {
+  id             String             @id @default(cuid())
+  
+  tenantId       String
+  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  name           String             
+  program        String?
+  pengajar       String?
+  jadwal         String?
+  kkm            Int                @default(75)
+  kapasitas      Int                @default(30)
+  isFinished     Boolean            @default(false)
+  
+  weights        Json?    
+  waGroupLink    String?
+  zoomLink       String?
+  certBackground String?  
+  
+  students       StudentProfile[]
+  materials      LearningMaterial[]
+  attendances    ClassAttendance[]
+  grades         ClassGrade[]
+  
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@unique([tenantId, name]) // Nama kelas harus unik di dalam 1 sekolah
+}
+
+model LearningMaterial {
   id          String    @id @default(cuid())
+  classRoomId String
+  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  
+  title       String
+  description String?
+  youtubeLink String?  
+  fileUrl     String?  
+  isPublished Boolean   @default(true)
+  order       Int       @default(0)
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model CbtExam {
+  id          String      @id @default(cuid())
+  
+  tenantId    String
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
   judul       String
   deskripsi   String?
   coverImage  String?
   token       String?
-  durasi      Int       @default(60)
-  kkm         Int       @default(75)
-  acakSoal    Boolean   @default(true)
-  antiCheat   Boolean   @default(true)
-  butuhToken  Boolean   @default(true)
+  durasi      Int         @default(60)
+  kkm         Int         @default(75)
+  acakSoal    Boolean     @default(true)
+  antiCheat   Boolean     @default(true)
+  butuhToken  Boolean     @default(true)
   deadline    DateTime?
-  isAktif     Boolean   @default(true)
-  namaKelas   String?   // Menyimpan kelas target (pisahkan dengan koma)
+  isAktif     Boolean     @default(true)
+  namaKelas   String?    
   
-  dataSoal    Json      // Menyimpan seluruh struktur soal (Array of Objects)
+  dataSoal    Json      
   
   results     CbtResult[]
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 }
 
 model CbtResult {
@@ -245,7 +266,7 @@ model CbtResult {
   emailPeserta  String
   
   nilai         Float    @default(0)
-  detailJawaban Json     // Menyimpan jawaban mentah peserta
+  detailJawaban Json     
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -262,7 +283,7 @@ model ClassAttendance {
   izin        Int       @default(0)
   alpa        Int       @default(0)
 
-  @@unique([classRoomId, studentId]) // 1 Santri = 1 Record Presensi per Kelas
+  @@unique([classRoomId, studentId]) 
 }
 
 model ClassGrade {
@@ -280,22 +301,24 @@ model ClassGrade {
   uas         Float?
   nilaiAkhir  Float?
 
-  @@unique([classRoomId, studentId]) // 1 Santri = 1 Rapor per Kelas
+  @@unique([classRoomId, studentId]) 
 }
 
+// Pengaturan sekarang spesifik per Instansi/Tenant
 model SystemSettings {
-  id          String   @id @default("default") // Hanya ada 1 baris (singleton)
-  schoolName  String   @default("LMS Pesantren")
-  schoolLogo  String?  @db.Text // Base64 image
+  id          String   @id @default(cuid())
   
-  // --- TAMBAHAN UNTUK TTD RAPOR ---
+  tenantId    String   @unique
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  schoolName  String   @default("LMS Pesantren")
+  schoolLogo  String?  @db.Text 
+  
   adminName   String?  @default("Staff Tata Usaha")
-  adminTtd    String?  @db.Text // Base64 gambar TTD Admin
+  adminTtd    String?  @db.Text 
   kepsekName  String?  @default("Kepala Sekolah")
   kepsekNip   String?
-  kepsekTtd   String?  @db.Text // Base64 gambar TTD Kepsek
-  // --------------------------------
+  kepsekTtd   String?  @db.Text 
 
   updatedAt   DateTime @updatedAt
 }
-

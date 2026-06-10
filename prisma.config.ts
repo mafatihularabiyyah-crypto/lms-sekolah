@@ -1,14 +1,9 @@
-// npm install --save-dev prisma dotenv
-import "dotenv/config";
-import { defineConfig } from "prisma/config";
+import 'dotenv/config';
+import { defineConfig, env } from '@prisma/config';
 
 export default defineConfig({
-  schema: "prisma/schema.prisma",
-  migrations: {
-    path: "prisma/migrations",
-  },
   datasource: {
-    // Ubah baris ini dari DATABASE_URL menjadi DIRECT_URL
-    url: process.env["DIRECT_URL"], 
+    // Gunakan fungsi env() bawaan Prisma 7
+    url: env('DATABASE_URL'), 
   },
 });

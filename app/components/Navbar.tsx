@@ -1,84 +1,96 @@
+import { getServerSession } from "next-auth";
 import prisma from "@/lib/prisma";
-import { Bell, ChevronDown, UserCircle, Database } from "lucide-react";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-
-// BARIS SAKTI INI WAJIB ADA AGAR NAVBAR TIDAK DI-CACHE:
-export const dynamic = "force-dynamic";
+import { Bell, ChevronDown, Database, User as UserIcon } from "lucide-react";
 
 export default async function Navbar() {
-  // 1. CEK SIAPA YANG SEDANG LOGIN SAAT INI
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id;
+  // 1. Ambil Sesi User
+  const session = await getServerSession();
+  let schoolName = "SIAKAD Network";
+  let schoolLogo = null;
+  let adminName = "Administrator";
+  let adminPhoto = null;
 
-  // 2. Ambil Data Sekolah
-  const school = await prisma.systemSettings.findUnique({ where: { id: "default" } });
-  
-  // 3. Ambil Data Admin TEPAT sesuai yang sedang Login (Bukan acak lagi)
-  let admin = null;
-  if (userId) {
-    admin = await prisma.user.findUnique({ where: { id: userId } });
-  } else {
-    // Fallback darurat jika sesi belum terbaca
-    admin = await prisma.user.findFirst({ where: { role: "ADMIN" } }); 
+  // 2. Tarik Data Spesifik Tenant jika ada yang login
+  if (session?.user?.email) {
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: { tenant: true }
+    });
+
+    if (user && user.tenantId) {
+      adminName = user.name;
+      adminPhoto = user.image;
+
+      // Tarik pengaturan khusus sekolah ini
+      const settings = await prisma.systemSettings.findUnique({
+        where: { tenantId: user.tenantId }
+      });
+
+      if (settings) {
+        schoolName = settings.schoolName;
+        schoolLogo = settings.schoolLogo;
+      } else {
+        // Fallback ke nama instansi jika belum ada setting
+        schoolName = user.tenant.name; 
+      }
+    }
   }
 
-  const schoolName = school?.schoolName || "LMS Pesantren";
-  const schoolLogo = school?.schoolLogo || null;
-  const adminName = admin?.name || "Admin Utama";
-  const adminImage = admin?.image || null;
-
   return (
-    <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 h-[76px] px-6 md:px-8 flex justify-between items-center sticky top-0 z-10">
+    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-30">
       
-      {/* KIRI: IDENTITAS SEKOLAH (Sekarang akan SELALU TAMPIL di HP maupun Laptop) */}
+      {/* SISI KIRI: Branding Sekolah */}
       <div className="flex items-center gap-3">
         {schoolLogo ? (
-          <img src={schoolLogo} className="w-9 h-9 rounded-full object-cover shadow-sm border border-slate-100" alt="Logo" />
+          <img 
+            src={schoolLogo} 
+            alt="Logo Sekolah" 
+            className="w-10 h-10 object-contain rounded-md"
+          />
         ) : (
-          <div className="w-9 h-9 rounded-full bg-indigo-50 flex items-center justify-center border border-indigo-100">
-            <Database className="text-indigo-600 w-4 h-4" />
+          <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center">
+            <Database size={20} />
           </div>
         )}
-        <h1 className="text-[1.15rem] font-bold text-slate-800 tracking-tight">{schoolName}</h1>
+        <h1 className="font-black text-slate-800 text-lg tracking-tight">
+          {schoolName}
+        </h1>
       </div>
 
-      {/* KANAN: MENU & PROFIL */}
-      <div className="flex items-center gap-3 md:gap-5">
-        
-        <button className="relative p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all">
-          <Bell className="w-[18px] h-[18px]" />
-          <span className="absolute top-2 right-2.5 w-2 h-2 bg-rose-500 border-2 border-white rounded-full"></span>
+      {/* SISI KANAN: Profil Admin */}
+      <div className="flex items-center gap-6">
+        <button className="relative text-slate-400 hover:text-slate-600 transition">
+          <Bell size={20} />
+          <span className="absolute -top-1 -right-1 w-2 h-2 bg-rose-500 rounded-full border border-white"></span>
         </button>
-        
-        <div className="hidden md:block h-8 w-[1px] bg-slate-200 mx-1"></div>
-        
-        <button className="flex items-center gap-3 p-1.5 pr-3 rounded-full hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all group cursor-pointer">
-          
-          <div className="relative">
-            {adminImage ? (
-              <img src={adminImage} className="w-9 h-9 rounded-full object-cover border border-slate-200 shadow-sm" alt="Avatar"/>
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-slate-100 to-slate-50 border border-slate-200 flex items-center justify-center">
-                <UserCircle className="w-5 h-5 text-slate-400" />
-              </div>
-            )}
-            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></div>
-          </div>
 
-          <div className="text-left hidden sm:block">
-            <p className="text-[13px] font-bold text-slate-700 leading-tight group-hover:text-indigo-600 transition-colors">
-              {adminName}
-            </p>
-            <p className="text-[11px] font-medium text-slate-400 mt-0.5">
-              Administrator
-            </p>
-          </div>
+        <div className="w-px h-8 bg-slate-200"></div>
+
+        <div className="flex items-center gap-3 cursor-pointer group">
+          {adminPhoto ? (
+            <div className="relative">
+              <img 
+                src={adminPhoto} 
+                alt="Profile" 
+                className="w-10 h-10 rounded-full object-cover border-2 border-slate-100"
+              />
+              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></span>
+            </div>
+          ) : (
+            <div className="relative w-10 h-10 bg-slate-50 border border-slate-200 rounded-full flex items-center justify-center text-slate-400">
+              <UserIcon size={20} />
+              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></span>
+            </div>
+          )}
           
-          <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-slate-600 ml-1 transition-transform group-hover:translate-y-0.5" />
-        </button>
-        
+          <div className="hidden md:block text-left">
+            <p className="text-sm font-bold text-slate-800 leading-tight">{adminName}</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Administrator</p>
+          </div>
+          <ChevronDown size={16} className="text-slate-400 group-hover:text-slate-600 transition" />
+        </div>
       </div>
+
     </header>
   );
 }
