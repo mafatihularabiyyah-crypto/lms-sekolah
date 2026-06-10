@@ -34,7 +34,7 @@ export default function Sidebar() {
     {
       label: "Administrasi",
       items: [
-        { name: "Pendaftaran", icon: Archive, href: "/admin/formulir" },
+        { name: "Dokumen Rapor", icon: Archive, href: "/admin/rapor" },
         { name: "Arsip & Leger Nilai", icon: Archive, href: "/admin/archives" },
         { name: "Keuangan & Tagihan", icon: CreditCard, href: "/admin/finance" },
       ]

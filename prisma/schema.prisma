@@ -287,29 +287,15 @@ model SystemSettings {
   id          String   @id @default("default") // Hanya ada 1 baris (singleton)
   schoolName  String   @default("LMS Pesantren")
   schoolLogo  String?  @db.Text // Base64 image
+  
+  // --- TAMBAHAN UNTUK TTD RAPOR ---
+  adminName   String?  @default("Staff Tata Usaha")
+  adminTtd    String?  @db.Text // Base64 gambar TTD Admin
+  kepsekName  String?  @default("Kepala Sekolah")
+  kepsekNip   String?
+  kepsekTtd   String?  @db.Text // Base64 gambar TTD Kepsek
+  // --------------------------------
+
   updatedAt   DateTime @updatedAt
 }
 
-// Tabel untuk menyimpan kerangka formulir (Pertanyaan)
-model Formulir {
-  id          String   @id @default(cuid())
-  judul       String
-  deskripsi   String?
-  coverImage  String?
-  struktur    Json     // Menyimpan array pertanyaan (teks, pilihan ganda, dll)
-  isAktif     Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  respon      ResponFormulir[]
-}
-
-// Tabel untuk menyimpan jawaban dari pendaftar
-model ResponFormulir {
-  id          String   @id @default(cuid())
-  formulirId  String
-  formulir    Formulir @relation(fields: [formulirId], references: [id], onDelete: Cascade)
-  dataRespon  Json     // Menyimpan jawaban pendaftar
-  isDiterima  Boolean  @default(false) // Status apakah sudah dijadikan santri
-  createdAt   DateTime @default(now())
-}

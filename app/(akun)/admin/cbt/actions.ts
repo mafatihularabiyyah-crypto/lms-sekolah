@@ -93,3 +93,55 @@ export async function getClassesForCbtDB() {
     return { success: false, data: [] };
   }
 }
+
+// FUNGSI BARU: SINKRONISASI KE RAPOR
+export async function syncCbtToGradeDB(examId: string, namaKelas: string, targetColumn: string) {
+  try {
+    // 1. Ambil data hasil ujian
+    const results = await prisma.cbtResult.findMany({ where: { examId } });
+    
+    // 2. Cari ID Kelas berdasarkan namanya
+    const classRoom = await prisma.classRoom.findUnique({ where: { name: namaKelas } });
+    if (!classRoom) return { success: false, error: "Kelas tidak ditemukan di sistem." };
+
+    // 3. Masukkan nilai ke tabel ClassGrade untuk setiap peserta
+    let successCount = 0;
+    for (const res of results) {
+       // Cocokkan nama peserta dengan data user/student
+       const studentProfile = await prisma.studentProfile.findFirst({
+          where: {
+             user: {
+                OR: [
+                  { email: res.emailPeserta },
+                  { name: { contains: res.namaPeserta, mode: 'insensitive' } }
+                ]
+             }
+          }
+       });
+
+       if (studentProfile) {
+          // Masukkan atau update nilai di kolom yang dipilih (contoh: tugas1, uts, uas)
+          await prisma.classGrade.upsert({
+             where: {
+                classRoomId_studentId: {
+                   classRoomId: classRoom.id,
+                   studentId: studentProfile.id
+                }
+             },
+             create: {
+                classRoomId: classRoom.id,
+                studentId: studentProfile.id,
+                [targetColumn]: res.nilai
+             },
+             update: {
+                [targetColumn]: res.nilai
+             }
+          });
+          successCount++;
+       }
+    }
+    return { success: true, count: successCount };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

@@ -6,11 +6,11 @@ import {
   Search, PlusCircle, Medal, Copy, Edit3, Trash2, Calendar, Timer, 
   Target, Settings, CheckCircle2, XCircle, Users, Monitor, Link as LinkIcon,
   CircleDot, CheckSquare, Type, AlignLeft, UploadCloud, Info, X, ChevronUp, ChevronDown,
-  Image as ImageIcon, Loader2, Save, BarChart3, FileSpreadsheet, Eye, RefreshCw
+  Image as ImageIcon, Loader2, Save, BarChart3, FileSpreadsheet, Eye, RefreshCw, ServerCrash
 } from 'lucide-react';
 import { 
   getCbtExamsDB, saveCbtExamDB, deleteCbtExamDB, toggleCbtStatusDB, 
-  getCbtResultsDB, updateCbtScoreDB, deleteCbtResultDB, getClassesForCbtDB 
+  getCbtResultsDB, updateCbtScoreDB, deleteCbtResultDB, getClassesForCbtDB, syncCbtToGradeDB 
 } from './actions';
 
 export default function CbtManagerPage() {
@@ -19,27 +19,28 @@ export default function CbtManagerPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useState("terbaru");
 
-  // Data
   const [exams, setExams] = useState<any[]>([]);
   const [availableClasses, setAvailableClasses] = useState<string[]>([]);
   
-  // Results Data
   const [currentExam, setCurrentExam] = useState<any>(null);
   const [results, setResults] = useState<any[]>([]);
+  const [resultSearchQuery, setResultSearchQuery] = useState(""); // Filter Nilai
 
-  // Builder State
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftExam, setDraftExam] = useState<any>({
     judul: "", deskripsi: "", coverImage: "", token: "", durasi: 60, kkm: 75,
     acakSoal: true, antiCheat: true, butuhToken: true, deadline: "", namaKelas: []
   });
   const [draftQuestions, setDraftQuestions] = useState<any[]>([]);
-  // State untuk pencarian Target Kelas di Sidebar
   const [classSearchQuery, setClassSearchQuery] = useState("");
-  // Modals
+
   const [modalAnalisis, setModalAnalisis] = useState(false);
   const [modalDetail, setModalDetail] = useState(false);
   const [detailData, setDetailData] = useState<any>(null);
+
+  const [modalSync, setModalSync] = useState(false);
+  const [syncClass, setSyncClass] = useState("");
+  const [syncColumn, setSyncColumn] = useState("tugas1");
 
   useEffect(() => { loadData(); }, []);
 
@@ -60,7 +61,6 @@ export default function CbtManagerPage() {
 
   const isArabic = (text: string) => /[\u0600-\u06FF]/.test(text || "");
 
-  // === IMAGE UPLOADER (TO BASE64 FOR DB JSON) ===
   const handleImageUpload = (file: File): Promise<string> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -72,7 +72,7 @@ export default function CbtManagerPage() {
   const uploadQImage = async (qIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 1024 * 1024) return alert("Ukuran gambar maksimal 1MB!");
+    if (file.size > 1024 * 1024) return alert("Ukuran maksimal 1MB!");
     const base64 = await handleImageUpload(file);
     const newQs = [...draftQuestions];
     newQs[qIndex].gambar = base64;
@@ -82,7 +82,7 @@ export default function CbtManagerPage() {
   const uploadOptImage = async (qIndex: number, optIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 1024 * 1024) return alert("Ukuran gambar maksimal 1MB!");
+    if (file.size > 1024 * 1024) return alert("Ukuran maksimal 1MB!");
     const base64 = await handleImageUpload(file);
     const newQs = [...draftQuestions];
     if (!newQs[qIndex].gambar_opsi) newQs[qIndex].gambar_opsi = ["", "", "", ""];
@@ -90,7 +90,6 @@ export default function CbtManagerPage() {
     setDraftQuestions(newQs);
   };
 
-  // === BUILDER ACTIONS ===
   const addQuestion = (tipe: string) => {
     const base = { id: `q_${Date.now()}`, tipe, pertanyaan: "", gambar: "", opsi: [], gambar_opsi: [], kunci: "" };
     if (tipe === 'pilgan') { base.opsi = ["", "", "", ""] as any; base.kunci = "0"; }
@@ -99,9 +98,7 @@ export default function CbtManagerPage() {
     setDraftQuestions([...draftQuestions, base]);
   };
 
-  const removeQuestion = (idx: number) => {
-    setDraftQuestions(draftQuestions.filter((_, i) => i !== idx));
-  };
+  const removeQuestion = (idx: number) => setDraftQuestions(draftQuestions.filter((_, i) => i !== idx));
 
   const moveQuestion = (idx: number, dir: -1 | 1) => {
     if (idx + dir < 0 || idx + dir >= draftQuestions.length) return;
@@ -116,8 +113,8 @@ export default function CbtManagerPage() {
     e.preventDefault();
     if (draftQuestions.length === 0) return alert("Tambahkan minimal 1 soal!");
     for (let i = 0; i < draftQuestions.length; i++) {
-      if (!draftQuestions[i].pertanyaan.trim()) return alert(`Soal ke-${i + 1} masih kosong!`);
-      if (draftQuestions[i].tipe === 'kompleks' && draftQuestions[i].kunci.length === 0) return alert(`Soal Kompleks ke-${i + 1} belum diberi kunci!`);
+      if (!draftQuestions[i].pertanyaan.trim()) return alert(`Soal ke-${i + 1} kosong!`);
+      if (draftQuestions[i].tipe === 'kompleks' && draftQuestions[i].kunci.length === 0) return alert(`Soal Kompleks ke-${i + 1} belum dikunci!`);
     }
 
     setIsLoading(true);
@@ -162,40 +159,72 @@ export default function CbtManagerPage() {
     });
     setDraftQuestions(JSON.parse(JSON.stringify(exam.dataSoal || [])));
     setActiveTab('buat');
-    if (duplicate) alert("CBT berhasil disalin! Silakan sesuaikan dan klik Simpan.");
+    if (duplicate) alert("CBT disalin! Silakan edit dan Simpan.");
   };
 
-  // === RESULTS ACTIONS ===
   const viewResults = async (exam: any) => {
     setCurrentExam(exam);
     setActiveTab('hasil');
+    setResultSearchQuery("");
     setIsLoading(true);
     const res = await getCbtResultsDB(exam.id);
-    if (res.success) setResults(res.data || []);
+    if (res.success) {
+      const sorted = (res.data || []).sort((a: any, b: any) => b.nilai - a.nilai);
+      setResults(sorted);
+    }
     setIsLoading(false);
   };
 
   const exportExcel = () => {
     if (results.length === 0) return;
     const data = results.map((r, i) => {
-      let row: any = { "Peringkat": i + 1, "Selesai Pada": new Date(r.createdAt).toLocaleString('id-ID'), "Peserta": r.namaPeserta, "Nilai": r.nilai, "Status": r.nilai >= currentExam.kkm ? "LULUS" : "GAGAL" };
+      let row: any = { 
+        "Peringkat": i + 1, 
+        "Selesai Pada": new Date(r.createdAt).toLocaleString('id-ID'), 
+        "Peserta": r.namaPeserta, 
+        "Nilai": r.nilai, 
+        "Status": r.nilai >= currentExam.kkm ? "LULUS" : "GAGAL" 
+      };
+      
       currentExam.dataSoal.forEach((soal: any, idx: number) => {
         let ans = r.detailJawaban[idx];
-        if (ans !== null && ans !== undefined) {
-          if (soal.tipe === 'pilgan') ans = soal.opsi[parseInt(ans)] || ans;
-          else if (soal.tipe === 'kompleks' && Array.isArray(ans)) ans = ans.map((a:any) => soal.opsi[parseInt(a)] || a).join(', ');
+        let isCorrect = 0; 
+        if (ans !== undefined && ans !== null && ans !== "" && (!Array.isArray(ans) || ans.length > 0)) {
+           if (soal.tipe === 'pilgan' || soal.tipe === 'benarsalah') {
+             let ansStr = ans.toString();
+             if (soal.tipe === 'benarsalah') { if(ansStr==="0") ansStr="Benar"; if(ansStr==="1") ansStr="Salah"; }
+             if (ansStr === soal.kunci.toString()) isCorrect = 1;
+           } else if (soal.tipe === 'kompleks') {
+             const sK = Array.isArray(soal.kunci) ? soal.kunci.map((k:any)=>k.toString()).sort().join() : "";
+             const sJ = Array.isArray(ans) ? ans.map((x:any)=>x.toString()).sort().join() : "";
+             if (sK === sJ) isCorrect = 1;
+           } else {
+             isCorrect = 1; 
+           }
         }
-        row[`Soal ${idx + 1}`] = ans || '-';
+        row[`Soal ${idx + 1}`] = isCorrect;
       });
       return row;
     });
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Nilai");
-    XLSX.writeFile(wb, `Nilai_CBT_${currentExam.judul.replace(/\s+/g, '_')}.xlsx`);
+    XLSX.writeFile(wb, `Nilai_${currentExam.judul.replace(/\s+/g, '_')}.xlsx`);
   };
 
-  // === RENDERERS ===
+  const handleSyncRaport = async () => {
+    if (!syncClass) return alert("Pilih kelas target terlebih dahulu!");
+    setIsLoading(true);
+    const res = await syncCbtToGradeDB(currentExam.id, syncClass, syncColumn);
+    setIsLoading(false);
+    if (res.success) {
+      alert(`Berhasil! Nilai ujian telah ditransfer ke raport ${res.count} siswa di kelas ${syncClass}.`);
+      setModalSync(false);
+    } else {
+      alert(`Gagal sinkronisasi: ${res.error}`);
+    }
+  };
+
   const filteredExams = useMemo(() => {
     let s = exams.filter(e => e.judul.toLowerCase().includes(searchQuery.toLowerCase()) || (e.namaKelas && e.namaKelas.toLowerCase().includes(searchQuery.toLowerCase())));
     if (sortMode === 'az') s.sort((a,b) => a.judul.localeCompare(b.judul));
@@ -203,10 +232,20 @@ export default function CbtManagerPage() {
     return s;
   }, [exams, searchQuery, sortMode]);
 
+  // PENCARIAN & STATISTIK HASIL
+  const filteredResults = useMemo(() => {
+    return results.filter(r => r.namaPeserta.toLowerCase().includes(resultSearchQuery.toLowerCase()));
+  }, [results, resultSearchQuery]);
+
+  const rataRataNilai = useMemo(() => {
+    if (filteredResults.length === 0) return 0;
+    const total = filteredResults.reduce((sum, curr) => sum + curr.nilai, 0);
+    return (total / filteredResults.length).toFixed(1);
+  }, [filteredResults]);
+
   return (
     <div className="flex flex-col h-full bg-slate-50 text-slate-800 animate-in fade-in duration-500">
       
-      {/* TABS NAVIGATION */}
       <div className="flex flex-wrap border-b border-slate-200 bg-white/50 text-sm rounded-t-[2rem] overflow-hidden shadow-sm">
         <button onClick={() => {setActiveTab('daftar'); setCurrentExam(null);}} className={`flex-1 sm:flex-none px-6 py-4 transition-all flex items-center justify-center gap-2 outline-none font-bold ${activeTab === 'daftar' ? 'border-b-4 border-blue-600 text-blue-700 bg-blue-50' : 'text-slate-500 hover:bg-slate-50'}`}><Monitor size={18} /> Daftar CBT</button>
         <button onClick={() => {if(activeTab!=='buat') resetBuilder(); setActiveTab('buat');}} className={`flex-1 sm:flex-none px-6 py-4 transition-all flex items-center justify-center gap-2 outline-none font-bold ${activeTab === 'buat' ? 'border-b-4 border-blue-600 text-blue-700 bg-blue-50' : 'text-slate-500 hover:bg-slate-50'}`}><PlusCircle size={18} /> {editingId ? "Edit CBT" : "Buat CBT Baru"}</button>
@@ -215,10 +254,9 @@ export default function CbtManagerPage() {
         )}
       </div>
 
-      <div className="p-4 lg:p-6 w-full">
+      <div className="p-4 lg:p-6 w-full relative">
         {isLoading && <div className="fixed inset-0 z-[120] bg-white/60 backdrop-blur-sm flex items-center justify-center"><Loader2 className="w-8 h-8 text-blue-600 animate-spin" /></div>}
 
-        {/* ======================= TAB: DAFTAR CBT ======================= */}
         {activeTab === 'daftar' && (
           <div className="space-y-6">
             <div className="bg-white p-4 lg:p-6 rounded-[1.5rem] shadow-sm border border-slate-100 flex flex-col md:flex-row gap-4">
@@ -238,18 +276,21 @@ export default function CbtManagerPage() {
                 const now = new Date().getTime();
                 const deadlineTime = f.deadline ? new Date(f.deadline).getTime() : 0;
                 let isActive = f.isAktif;
-                if (deadlineTime && now > deadlineTime && isActive) isActive = false; // Auto close visualization
+                if (deadlineTime && now > deadlineTime && isActive) isActive = false;
 
                 const urlIsi = `${window.location.origin}/ujian?id=${f.id}`;
                 return (
-                  <div key={f.id} className="bg-white p-6 rounded-[2rem] shadow-md border border-slate-100 flex flex-col h-full hover:-translate-y-1 transition duration-300 relative overflow-hidden group">
+                  <div key={f.id} className={`bg-white p-6 rounded-[2rem] shadow-md border flex flex-col h-full hover:-translate-y-1 transition duration-300 relative overflow-hidden group ${isActive ? 'border-indigo-100' : 'border-slate-100 opacity-80'}`}>
                     {f.coverImage && <img src={f.coverImage} className="absolute top-0 left-0 w-full h-24 object-cover opacity-5 group-hover:opacity-10 transition pointer-events-none" alt="" />}
                     
                     <div className="flex justify-between items-start mb-2 relative z-10">
                       <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shadow-inner shrink-0"><Monitor size={24}/></div>
                       <div className="flex flex-col items-end">
                         <label className="relative inline-flex items-center cursor-pointer" title="Buka/Tutup Manual">
-                          <input type="checkbox" className="sr-only peer" checked={isActive} onChange={e => toggleCbtStatusDB(f.id, e.target.checked)}/>
+                          <input type="checkbox" className="sr-only peer" checked={isActive} onChange={async (e) => {
+                              await toggleCbtStatusDB(f.id, e.target.checked);
+                              loadData();
+                          }}/>
                           <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500 shadow-inner"></div>
                         </label>
                         <span className={`text-[9px] font-black uppercase mt-1 ${isActive ? 'text-emerald-500' : 'text-slate-400'}`}>{isActive ? 'STATUS: LIVE' : 'DITUTUP'}</span>
@@ -267,20 +308,18 @@ export default function CbtManagerPage() {
                     <div className="grid grid-cols-2 gap-2 mb-4 relative z-10">
                       <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-center"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Token</p><p className={`font-mono font-black ${f.butuhToken ? 'text-blue-700' : 'text-slate-400'} text-base tracking-widest`}>{f.butuhToken ? f.token : 'NO TOKEN'}</p></div>
                       <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-center"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Waktu</p><p className="font-bold text-slate-700 text-sm flex items-center justify-center gap-1"><Timer size={14}/> {f.durasi} Min</p></div>
-                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-center"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Lulus</p><p className="font-bold text-amber-600 text-sm flex items-center justify-center gap-1"><Target size={14}/> {f.kkm}</p></div>
-                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-center flex flex-col justify-center items-center"><p className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-tight flex items-center gap-1"><Settings size={12}/> Set</p><p className="text-[9px] font-bold text-slate-500 mt-0.5">{f.acakSoal ? 'Acak' : 'Urut'} & {f.antiCheat ? 'Anti-Cheat' : 'Bebas'}</p></div>
                     </div>
 
                     <div className="flex items-center gap-2 mb-4 bg-blue-50/50 p-2 rounded-xl border border-blue-100 relative z-10">
                       <input type="text" readOnly value={urlIsi} className="w-full bg-transparent text-[10px] text-blue-800 font-mono outline-none px-2 font-bold" />
-                      <button onClick={() => {navigator.clipboard.writeText(urlIsi); alert("Link berhasil disalin!");}} className="p-1.5 bg-white shadow-sm border border-blue-200 rounded-lg text-blue-600 hover:bg-blue-100 transition cursor-pointer"><Copy size={14}/></button>
+                      <button onClick={() => {navigator.clipboard.writeText(urlIsi); alert("Link disalin!");}} className="p-1.5 bg-white shadow-sm border border-blue-200 rounded-lg text-blue-600 hover:bg-blue-100 transition cursor-pointer"><Copy size={14}/></button>
                     </div>
 
                     <div className="flex flex-wrap gap-2 mt-auto border-t border-slate-100 pt-4 relative z-10">
-                      <button onClick={() => viewResults(f)} className="flex-1 py-2 bg-blue-50 text-blue-700 border border-blue-200 font-bold rounded-xl hover:bg-blue-600 hover:text-white transition text-xs shadow-sm flex justify-center items-center gap-1.5 cursor-pointer"><Users size={14}/> {f._count.results} Peserta</button>
-                      <button onClick={() => editExam(f, true)} className="p-2 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-800 hover:text-white transition text-xs shadow-sm cursor-pointer" title="Copy CBT"><Copy size={14}/></button>
-                      <button onClick={() => editExam(f, false)} className="p-2 bg-amber-50 text-amber-600 font-bold rounded-xl hover:bg-amber-600 hover:text-white transition text-xs shadow-sm cursor-pointer" title="Edit CBT"><Edit3 size={14}/></button>
-                      <button onClick={() => {if(confirm("Hapus CBT beserta semua nilainya?")) deleteCbtExamDB(f.id);}} className="p-2 bg-rose-50 text-rose-600 font-bold rounded-xl hover:bg-rose-600 hover:text-white transition text-xs shadow-sm cursor-pointer" title="Hapus"><Trash2 size={14}/></button>
+                      <button onClick={() => viewResults(f)} className="flex-1 py-2 bg-blue-50 text-blue-700 border border-blue-200 font-bold rounded-xl hover:bg-blue-600 hover:text-white transition text-xs shadow-sm flex justify-center items-center gap-1.5 cursor-pointer"><Users size={14}/> {f._count.results} Nilai</button>
+                      <button onClick={() => editExam(f, true)} className="p-2 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-800 hover:text-white transition text-xs shadow-sm cursor-pointer" title="Copy"><Copy size={14}/></button>
+                      <button onClick={() => editExam(f, false)} className="p-2 bg-amber-50 text-amber-600 font-bold rounded-xl hover:bg-amber-600 hover:text-white transition text-xs shadow-sm cursor-pointer" title="Edit"><Edit3 size={14}/></button>
+                      <button onClick={async () => {if(confirm("Hapus CBT dan nilainya?")) { await deleteCbtExamDB(f.id); loadData(); }}} className="p-2 bg-rose-50 text-rose-600 font-bold rounded-xl hover:bg-rose-600 hover:text-white transition text-xs shadow-sm cursor-pointer" title="Hapus"><Trash2 size={14}/></button>
                     </div>
                   </div>
                 );
@@ -295,8 +334,8 @@ export default function CbtManagerPage() {
             <div className="flex-1 w-full bg-white border border-slate-200 rounded-[2rem] p-6 lg:p-10 shadow-xl relative z-10">
               <form onSubmit={saveCBT}>
                 <div className="mb-8 border-b-4 border-blue-500 pb-6 rounded-t-lg">
-                  <input type="url" value={draftExam.coverImage} onChange={e => setDraftExam({...draftExam, coverImage: e.target.value})} placeholder="Link Gambar Header Ujian (Opsional)" className="w-full bg-blue-50 border border-blue-200 rounded-xl p-3 font-medium text-blue-800 outline-none mb-4 text-xs" />
-                  <input type="text" value={draftExam.judul} onChange={e => setDraftExam({...draftExam, judul: e.target.value})} placeholder="Judul Ujian (Cth: TryOut Akbar)" required className="w-full text-3xl font-black text-slate-900 bg-transparent outline-none mb-3 placeholder-slate-300" />
+                  <input type="url" value={draftExam.coverImage} onChange={e => setDraftExam({...draftExam, coverImage: e.target.value})} placeholder="Link Gambar Header (Opsional)" className="w-full bg-blue-50 border border-blue-200 rounded-xl p-3 font-medium text-blue-800 outline-none mb-4 text-xs" />
+                  <input type="text" value={draftExam.judul} onChange={e => setDraftExam({...draftExam, judul: e.target.value})} placeholder="Judul Ujian" required className="w-full text-3xl font-black text-slate-900 bg-transparent outline-none mb-3 placeholder-slate-300" />
                   <textarea value={draftExam.deskripsi} onChange={e => setDraftExam({...draftExam, deskripsi: e.target.value})} placeholder="Tuliskan instruksi ujian di sini..." className="w-full text-sm font-medium text-slate-500 bg-transparent outline-none resize-none h-14" required></textarea>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
@@ -305,7 +344,7 @@ export default function CbtManagerPage() {
                       <div className="flex items-center justify-center gap-2"><Timer size={18} className="text-amber-500"/><input type="number" required min="1" value={draftExam.durasi} onChange={e => setDraftExam({...draftExam, durasi: e.target.value})} className="bg-transparent font-black text-xl text-slate-800 outline-none w-16 text-center"/></div>
                     </div>
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-center">
-                      <label className="text-[10px] font-black uppercase text-slate-500 block mb-1 text-center">Batas Lulus (KKM)</label>
+                      <label className="text-[10px] font-black uppercase text-slate-500 block mb-1 text-center">Batas Lulus</label>
                       <div className="flex items-center justify-center gap-2"><Target size={18} className="text-emerald-500"/><input type="number" required min="0" max="100" value={draftExam.kkm} onChange={e => setDraftExam({...draftExam, kkm: e.target.value})} className="bg-transparent font-black text-xl text-slate-800 outline-none w-16 text-center"/></div>
                     </div>
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col items-center justify-center gap-2">
@@ -340,7 +379,6 @@ export default function CbtManagerPage() {
                   </div>
                 </div>
 
-                {/* AREA SOAL */}
                 <div className="space-y-4 min-h-[200px]">
                   {draftQuestions.length === 0 ? (
                     <div className="p-10 border-2 border-dashed border-slate-300 rounded-3xl text-center text-slate-400 font-bold bg-slate-50/50">Belum ada soal. Tambahkan dari menu samping.</div>
@@ -352,7 +390,6 @@ export default function CbtManagerPage() {
                       <div key={soal.id} className="bg-white p-5 lg:p-6 rounded-[1.5rem] border border-slate-200 shadow-sm relative group mb-4 transition-all hover:shadow-md border-l-4 border-l-blue-500 focus-within:ring-2 focus-within:ring-blue-100">
                         <div className="absolute -top-3 left-6 bg-blue-100 text-blue-700 px-3 py-0.5 rounded-full text-[9px] font-black tracking-widest border border-blue-200 shadow-sm">{typeLabel}</div>
                         
-                        {/* Gambar Soal */}
                         {soal.gambar ? (
                           <div className="relative inline-block mb-3 border border-slate-200 rounded-lg p-1 bg-white">
                             <img src={soal.gambar} className="h-24 rounded object-contain" alt="Gambar Soal"/>
@@ -367,7 +404,6 @@ export default function CbtManagerPage() {
 
                         <textarea placeholder="Ketik soal/pertanyaan di sini..." value={soal.pertanyaan} onChange={e => {const n=[...draftQuestions]; n[idx].pertanyaan=e.target.value; setDraftQuestions(n);}} className={`w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-xl p-3 mb-3 font-medium outline-none focus:ring-2 focus:ring-blue-500 resize-none h-20 transition ${isArab}`}></textarea>
 
-                        {/* Opsi Pilgan */}
                         {soal.tipe === 'pilgan' && (
                           <>
                             <div className="space-y-3 mb-3">
@@ -395,7 +431,6 @@ export default function CbtManagerPage() {
                           </>
                         )}
 
-                        {/* Opsi Benar/Salah */}
                         {soal.tipe === 'benarsalah' && (
                           <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 flex items-center gap-3">
                             <label className="font-bold text-emerald-800 text-xs">Kunci Benar:</label>
@@ -405,7 +440,6 @@ export default function CbtManagerPage() {
                           </div>
                         )}
 
-                        {/* Opsi Kompleks */}
                         {soal.tipe === 'kompleks' && (
                           <>
                             <p className="text-[10px] text-slate-500 font-bold mb-2 uppercase">*Centang jawaban yang benar (bisa &gt;1).</p>
@@ -433,11 +467,6 @@ export default function CbtManagerPage() {
                           </>
                         )}
 
-                        {/* Opsi Info */}
-                        {(soal.tipe === 'essay_singkat' || soal.tipe === 'essay_panjang') && <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-xs font-bold flex items-center gap-2"><Info size={16}/> Soal ISIAN ini akan menampilkan kolom teks. Perlu koreksi manual setelah selesai.</div>}
-                        {soal.tipe === 'upload_file' && <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-purple-700 text-xs font-bold flex items-center gap-2"><UploadCloud size={16}/> Peserta akan diminta mengunggah File (PDF/Gambar) sebagai jawaban.</div>}
-
-                        {/* Controls Bottom */}
                         <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-sm">
                           <div className="flex items-center gap-3">
                             <button type="button" onClick={() => moveQuestion(idx, -1)} className="p-1.5 rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition cursor-pointer"><ChevronUp size={18}/></button>
@@ -455,7 +484,6 @@ export default function CbtManagerPage() {
               </form>
             </div>
 
-            {/* SIDEBAR TAMBAH SOAL */}
             <div className="w-full lg:w-72 bg-white p-5 rounded-2xl shadow-xl border border-slate-200 sticky top-28 shrink-0">
               <h3 className="font-black text-slate-800 mb-4 text-sm uppercase tracking-widest flex items-center gap-2"><PlusCircle className="text-blue-600" size={18}/> Tambah Bank Soal</h3>
               <div className="flex flex-col gap-2">
@@ -466,51 +494,29 @@ export default function CbtManagerPage() {
                 <button type="button" onClick={() => addQuestion('essay_singkat')} className="w-full text-left p-3 border border-slate-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition font-bold text-xs text-slate-600 flex items-center gap-3 cursor-pointer"><Type size={18}/> Essay Singkat</button>
                 <button type="button" onClick={() => addQuestion('essay_panjang')} className="w-full text-left p-3 border border-slate-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition font-bold text-xs text-slate-600 flex items-center gap-3 cursor-pointer"><AlignLeft size={18}/> Essay Panjang</button>
                 <button type="button" onClick={() => addQuestion('upload_file')} className="w-full text-left p-3 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 hover:text-emerald-800 transition font-bold text-xs text-emerald-700 flex items-center gap-3 cursor-pointer"><UploadCloud size={18}/> Upload Berkas</button>
-                {/* TARGET KELAS BARU DENGAN PENCARIAN */}
-<div className="mt-6 border-t border-slate-100 pt-6">
-  <h3 className="font-black text-slate-800 mb-3 text-sm uppercase tracking-widest flex items-center gap-2">
-    <Target className="text-emerald-500" size={18}/> Target Kelas
-  </h3>
-  
-  {/* Kolom Pencarian Kelas */}
-  <div className="relative mb-3">
-    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-    <input 
-      type="text" 
-      placeholder="Cari kelas..." 
-      value={classSearchQuery}
-      onChange={e => setClassSearchQuery(e.target.value)}
-      className="w-full bg-slate-50 border border-slate-200 py-2 pl-9 pr-3 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs font-bold text-slate-700 transition"
-    />
-  </div>
-
-  {/* Daftar Kelas Checkbox */}
-  <div className="bg-slate-50 border border-slate-200 rounded-xl p-2 max-h-48 overflow-y-auto custom-scrollbar shadow-inner">
-    {availableClasses.filter(k => k.toLowerCase().includes(classSearchQuery.toLowerCase())).length === 0 ? (
-      <p className="text-xs text-slate-400 italic p-2 text-center">Kelas tidak ditemukan.</p>
-    ) : (
-      availableClasses
-        .filter(k => k.toLowerCase().includes(classSearchQuery.toLowerCase()))
-        .map(k => (
-        <label key={k} className="flex items-center p-2 hover:bg-white rounded-lg cursor-pointer transition border border-transparent hover:border-slate-200 hover:shadow-sm mb-1">
-          <input 
-            type="checkbox" 
-            checked={draftExam.namaKelas.includes(k)} 
-            onChange={e => {
-              const newClasses = e.target.checked 
-                ? [...draftExam.namaKelas, k] 
-                : draftExam.namaKelas.filter((x:string) => x !== k);
-              setDraftExam({...draftExam, namaKelas: newClasses});
-            }} 
-            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 mr-2.5 cursor-pointer shrink-0"
-          />
-          <span className="text-xs font-bold text-slate-700 leading-tight">{k}</span>
-        </label>
-      ))
-    )}
-  </div>
-  <p className="text-[9px] font-bold text-slate-400 mt-2 text-right">*Bisa pilih lebih dari 1</p>
-</div>
+                
+                <div className="mt-6 border-t border-slate-100 pt-6">
+                  <h3 className="font-black text-slate-800 mb-3 text-sm uppercase tracking-widest flex items-center gap-2"><Target className="text-emerald-500" size={18}/> Target Kelas</h3>
+                  <div className="relative mb-3">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                    <input type="text" placeholder="Cari kelas..." value={classSearchQuery} onChange={e => setClassSearchQuery(e.target.value)} className="w-full bg-slate-50 border border-slate-200 py-2 pl-9 pr-3 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs font-bold text-slate-700 transition"/>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-2 max-h-48 overflow-y-auto custom-scrollbar shadow-inner">
+                    {availableClasses.filter(k => k.toLowerCase().includes(classSearchQuery.toLowerCase())).length === 0 ? (
+                      <p className="text-xs text-slate-400 italic p-2 text-center">Kelas tidak ditemukan.</p>
+                    ) : (
+                      availableClasses.filter(k => k.toLowerCase().includes(classSearchQuery.toLowerCase())).map(k => (
+                        <label key={k} className="flex items-center p-2 hover:bg-white rounded-lg cursor-pointer transition border border-transparent hover:border-slate-200 hover:shadow-sm mb-1">
+                          <input type="checkbox" checked={draftExam.namaKelas.includes(k)} onChange={e => {
+                              const newClasses = e.target.checked ? [...draftExam.namaKelas, k] : draftExam.namaKelas.filter((x:string) => x !== k);
+                              setDraftExam({...draftExam, namaKelas: newClasses});
+                            }} className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 mr-2.5 cursor-pointer shrink-0"/>
+                          <span className="text-xs font-bold text-slate-700 leading-tight">{k}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -519,32 +525,51 @@ export default function CbtManagerPage() {
         {/* ======================= TAB: HASIL NILAI ======================= */}
         {activeTab === 'hasil' && currentExam && (
           <div className="bg-white rounded-[2rem] shadow-xl border border-slate-100 overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-slate-100 bg-blue-50/50 flex justify-between items-center">
+            <div className="p-6 border-b border-slate-100 bg-blue-50/50 flex flex-col md:flex-row gap-4 justify-between items-center">
               <div className="flex items-center gap-2">
-                <h3 className="font-black text-slate-800 text-lg flex items-center gap-2"><Medal className="text-blue-600" size={20}/> Nilai: {currentExam.judul}</h3>
-                <span className="flex flex-wrap items-center">
-                  {currentExam.namaKelas?.split(',').map((k:string, i:number) => <span key={i} className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border border-blue-200 ml-1 inline-block">{k.trim()}</span>)}
-                </span>
+                <h3 className="font-black text-slate-800 text-lg flex items-center gap-2"><Medal className="text-blue-600" size={20}/> Peringkat Nilai: {currentExam.judul}</h3>
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => setModalAnalisis(true)} className="px-4 py-2.5 bg-amber-100 border border-amber-200 text-amber-700 rounded-lg text-xs font-bold hover:bg-amber-500 hover:text-white shadow-sm flex items-center gap-1.5 transition cursor-pointer"><BarChart3 size={16}/> Analisis Jawaban</button>
-                <button onClick={exportExcel} className="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-50 shadow-sm flex items-center gap-1.5 transition cursor-pointer"><FileSpreadsheet size={16}/> Export Excel</button>
-                <button onClick={() => alert("Fitur Sinkron Raport akan disesuaikan dengan skema Gradebook di pembaruan mendatang.")} className="px-4 py-2.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 shadow-md flex items-center gap-1.5 transition cursor-pointer"><RefreshCw size={16}/> Sinkron Raport</button>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {/* FILTER SEARCH DI TABEL HASIL */}
+                <div className="relative mr-2">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                    <input type="text" placeholder="Cari nama peserta..." value={resultSearchQuery} onChange={e => setResultSearchQuery(e.target.value)} className="w-56 bg-white border border-slate-200 py-2 pl-9 pr-3 rounded-xl outline-none focus:border-blue-500 font-medium text-slate-700 text-sm shadow-sm transition" />
+                </div>
+                <button onClick={() => setModalAnalisis(true)} className="px-4 py-2.5 bg-amber-100 border border-amber-200 text-amber-700 rounded-xl text-xs font-bold hover:bg-amber-500 hover:text-white shadow-sm flex items-center gap-1.5 transition cursor-pointer"><BarChart3 size={16}/> Analisis Butir Soal</button>
+                <button onClick={exportExcel} className="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 shadow-sm flex items-center gap-1.5 transition cursor-pointer"><FileSpreadsheet size={16}/> Export Excel</button>
+                <button onClick={() => setModalSync(true)} className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 shadow-md flex items-center gap-1.5 transition cursor-pointer"><RefreshCw size={16}/> Sinkron Rapor</button>
               </div>
             </div>
+            
             <div className="overflow-x-auto custom-scrollbar flex-1 bg-white min-h-[400px]">
               <table className="w-full text-left min-w-[700px]">
                 <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-500 tracking-widest border-b border-slate-200">
-                  <tr><th className="py-4 px-6 text-center w-16">No</th><th className="py-4 px-6 border-r border-slate-200">Nama Peserta & Email</th><th className="py-4 px-6 border-r border-slate-200">Waktu Selesai</th><th className="py-4 px-6 text-center border-r border-slate-200">Nilai & Status</th><th className="py-4 px-6 text-center w-36">Aksi Admin</th></tr>
+                  <tr>
+                    <th className="py-4 px-6 text-center w-16">Rank</th>
+                    <th className="py-4 px-6 border-r border-slate-200">Nama Peserta & Email</th>
+                    <th className="py-4 px-6 border-r border-slate-200">Waktu Selesai</th>
+                    <th className="py-4 px-6 text-center border-r border-slate-200">Nilai & Status</th>
+                    <th className="py-4 px-6 text-center w-40">Aksi Admin</th>
+                  </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {results.length === 0 ? <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-medium">Belum ada peserta yang mengumpulkan ujian.</td></tr> : results.map((r, i) => (
+                  {filteredResults.length === 0 ? <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-medium">Data tidak ditemukan.</td></tr> : filteredResults.map((r, i) => (
                     <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50 transition text-sm">
-                      <td className="py-4 px-6 text-center font-bold text-slate-400">{i+1}</td>
+                      <td className="py-4 px-6 text-center">
+                         {/* RANKING ESTETIK TANPA ICON */}
+                         <span className={`w-8 h-8 flex items-center justify-center rounded-lg mx-auto font-black text-sm shadow-sm ${
+                           i === 0 ? 'bg-amber-100 text-amber-600 border border-amber-200' :
+                           i === 1 ? 'bg-slate-100 text-slate-500 border border-slate-200' :
+                           i === 2 ? 'bg-orange-100 text-orange-700 border border-orange-200' :
+                           'text-slate-400 bg-white border border-slate-100'
+                         }`}>
+                           {i + 1}
+                         </span>
+                      </td>
                       <td className="py-4 px-6 font-bold text-slate-800">{r.namaPeserta} <br/><span className="text-xs font-medium text-slate-500">{r.emailPeserta}</span></td>
                       <td className="py-4 px-6 text-xs font-bold text-slate-500">{new Date(r.createdAt).toLocaleString('id-ID')}</td>
                       <td className="py-4 px-6 text-center">
-                        <span className={`px-3 py-1.5 rounded-lg border font-black text-sm block w-max mx-auto mb-1 ${r.nilai >= currentExam.kkm ? 'text-emerald-700 bg-emerald-100 border-emerald-200' : 'text-rose-700 bg-rose-100 border-rose-200'}`}>{r.nilai}</span>
+                        <span className={`px-3 py-1.5 rounded-lg border font-black text-sm block w-max mx-auto mb-1 shadow-sm ${r.nilai >= currentExam.kkm ? 'text-emerald-700 bg-emerald-100 border-emerald-200' : 'text-rose-700 bg-rose-100 border-rose-200'}`}>{r.nilai}</span>
                         {r.nilai >= currentExam.kkm ? <span className="text-[10px] font-black uppercase text-emerald-600 tracking-widest"><CheckCircle2 className="inline w-3 h-3 mb-0.5"/> LULUS</span> : <span className="text-[10px] font-black uppercase text-rose-500 tracking-widest"><XCircle className="inline w-3 h-3 mb-0.5"/> GAGAL</span>}
                       </td>
                       <td className="py-4 px-6 text-center whitespace-nowrap">
@@ -560,11 +585,66 @@ export default function CbtManagerPage() {
                     </tr>
                   ))}
                 </tbody>
+                {/* FOOTER TABEL STATISTIK */}
+                {filteredResults.length > 0 && (
+                  <tfoot className="bg-slate-50 border-t border-slate-200">
+                    <tr>
+                      <td colSpan={3} className="py-4 px-6 text-right font-black uppercase tracking-widest text-[10px] text-slate-500">
+                        Total Peserta & Rata-Rata Nilai
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                         <span className="text-lg font-black text-blue-700 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200 shadow-sm">{rataRataNilai}</span>
+                      </td>
+                      <td className="py-4 px-6 text-center font-black text-slate-600 text-sm">
+                         <Users size={16} className="inline mb-0.5 mr-1 text-slate-400" /> {filteredResults.length} Siswa
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>
         )}
       </div>
+
+      {/* MODAL SINKRON RAPOR */}
+      {modalSync && currentExam && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-md rounded-[2rem] p-0 shadow-2xl relative flex flex-col border border-slate-100">
+            <div className="bg-emerald-50 px-6 py-5 border-b border-emerald-200 flex justify-between items-center shrink-0">
+              <h2 className="text-lg font-black text-emerald-800 flex items-center gap-2"><RefreshCw className="text-emerald-600" size={20}/> Sinkronisasi ke Rapor</h2>
+              <button onClick={() => setModalSync(false)} className="text-emerald-400 hover:text-emerald-700 transition cursor-pointer"><X size={24}/></button>
+            </div>
+            <div className="p-6 bg-white space-y-4">
+               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm font-medium text-slate-600">
+                  Nilai dari Ujian <span className="font-bold text-slate-800">"{currentExam.judul}"</span> akan dimasukkan secara massal ke kolom nilai raport kelas yang Anda pilih di bawah ini.
+               </div>
+               <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Target Kelas</label>
+                  <select value={syncClass} onChange={e => setSyncClass(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-bold text-slate-700 outline-none focus:border-blue-500 cursor-pointer">
+                     <option value="">-- Pilih Kelas --</option>
+                     {currentExam.namaKelas?.split(',').map((k:string, i:number) => <option key={i} value={k.trim()}>{k.trim()}</option>)}
+                  </select>
+               </div>
+               <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Target Kolom Penilaian</label>
+                  <select value={syncColumn} onChange={e => setSyncColumn(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-bold text-slate-700 outline-none focus:border-blue-500 cursor-pointer">
+                     <option value="tugas1">Nilai Tugas 1</option>
+                     <option value="tugas2">Nilai Tugas 2</option>
+                     <option value="tugas3">Nilai Tugas 3</option>
+                     <option value="tugas4">Nilai Tugas 4</option>
+                     <option value="tugas5">Nilai Tugas 5</option>
+                     <option value="uts">Nilai Ujian Tengah Semester (UTS)</option>
+                     <option value="uas">Nilai Ujian Akhir Semester (UAS)</option>
+                  </select>
+               </div>
+               <button onClick={handleSyncRaport} className="w-full bg-emerald-600 text-white font-bold py-3.5 rounded-xl hover:bg-emerald-700 shadow-md flex items-center justify-center gap-2 mt-2">
+                 <ServerCrash size={18}/> Jalankan Sinkronisasi
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL ANALISIS SOAL */}
       {modalAnalisis && (
@@ -576,7 +656,7 @@ export default function CbtManagerPage() {
             </div>
             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-white space-y-4">
               {currentExam.dataSoal.map((soal: any, i: number) => {
-                let benar = 0, salah = 0, kosong = 0, partial = 0;
+                let benar = 0, salah = 0, kosong = 0;
                 results.forEach(r => {
                   const j = r.detailJawaban[i];
                   if (j === undefined || j === null || j === "" || (Array.isArray(j) && j.length === 0)) { kosong++; }
@@ -588,7 +668,7 @@ export default function CbtManagerPage() {
                     } else if (soal.tipe === 'kompleks') {
                       const strKunci = Array.isArray(soal.kunci) ? soal.kunci.map((k:any) => k.toString()) : [];
                       const strJawab = Array.isArray(j) ? j.map((x:any) => x.toString()) : [j.toString()];
-                      if (strKunci.length > 0 && strKunci.length === strJawab.length && strKunci.every((k:string) => strJawab.includes(k))) benar++; else partial++;
+                      if (strKunci.length > 0 && strKunci.length === strJawab.length && strKunci.every((k:string) => strJawab.includes(k))) benar++; else salah++;
                     } else { benar++; }
                   }
                 });
@@ -604,7 +684,7 @@ export default function CbtManagerPage() {
                     <div className="w-full bg-slate-200 rounded-full h-2.5 mb-2 mt-4 shadow-inner"><div className={`${barColor} h-2.5 rounded-full transition-all`} style={{width: `${persen}%`}}></div></div>
                     <div className="flex justify-between text-[11px] font-black uppercase text-slate-500 mt-2">
                       <span className="text-emerald-600">Benar/Diisi: {benar}</span>
-                      <span className="text-rose-600">Salah/Parsial: {salah + partial}</span>
+                      <span className="text-rose-600">Salah/Koreksi: {salah}</span>
                       <span>Kosong: {kosong}</span>
                       <span>Akurasi: {persen}%</span>
                     </div>
@@ -616,16 +696,70 @@ export default function CbtManagerPage() {
         </div>
       )}
 
-      {/* MODAL DETAIL JAWABAN PESERTA (Tugas Tambahan/Placeholder) */}
+      {/* MODAL MATA: PREVIEW JAWABAN PESERTA */}
       {modalDetail && detailData && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
            <div className="bg-white w-full max-w-3xl rounded-[2rem] p-0 shadow-2xl relative flex flex-col max-h-[90vh] overflow-hidden border border-slate-100">
               <div className="bg-blue-50 px-6 py-5 border-b border-blue-200 flex justify-between items-center shrink-0">
-                <h2 className="text-lg font-black text-blue-900 flex items-center gap-2"><Eye className="text-blue-600" size={20}/> Jawaban: {detailData.namaPeserta}</h2>
+                <h2 className="text-lg font-black text-blue-900 flex items-center gap-2"><Eye className="text-blue-600" size={20}/> Lembar Jawaban: {detailData.namaPeserta}</h2>
                 <button onClick={() => setModalDetail(false)} className="text-slate-400 hover:text-rose-500 transition cursor-pointer"><X size={24}/></button>
               </div>
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-slate-50 space-y-4">
-                 <div className="text-center p-10 text-slate-500 font-bold">Logika review detail jawaban tiap soal peserta akan dirender di sini. (Silakan tutup untuk kembali)</div>
+                 
+                 {currentExam.dataSoal.map((soal: any, i: number) => {
+                    const ans = detailData.detailJawaban[i];
+                    
+                    let isCorrect = false;
+                    let textJawaban = "Tidak dijawab";
+                    let badgeColor = "bg-slate-100 text-slate-500 border-slate-200";
+
+                    if (ans !== undefined && ans !== null && ans !== "") {
+                       if (soal.tipe === 'pilgan') {
+                         textJawaban = soal.opsi[parseInt(ans.toString())] || ans.toString();
+                         if (ans.toString() === soal.kunci.toString()) isCorrect = true;
+                       } else if (soal.tipe === 'benarsalah') {
+                         let ansStr = ans.toString();
+                         if (ansStr === "0") ansStr = "Benar";
+                         if (ansStr === "1") ansStr = "Salah";
+                         textJawaban = ansStr;
+                         if (ansStr === soal.kunci.toString()) isCorrect = true;
+                       } else if (soal.tipe === 'kompleks') {
+                         const ansArr = Array.isArray(ans) ? ans : [ans];
+                         textJawaban = ansArr.map((a:any) => soal.opsi[parseInt(a)]).join(', ');
+                         
+                         const sK = Array.isArray(soal.kunci) ? soal.kunci.map((k:any)=>k.toString()).sort().join() : "";
+                         const sJ = ansArr.map((x:any)=>x.toString()).sort().join();
+                         if (sK === sJ) isCorrect = true;
+                       } else {
+                         textJawaban = ans; // Essay
+                         isCorrect = true; // Essay default centang hijau agar dikoreksi manual guru
+                       }
+                       
+                       badgeColor = isCorrect ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-rose-100 text-rose-700 border-rose-200";
+                    }
+
+                    return (
+                       <div key={i} className={`bg-white p-5 rounded-2xl border ${isCorrect ? 'border-emerald-200' : 'border-rose-200'} shadow-sm`}>
+                          <div className="flex items-start justify-between gap-4">
+                             <div className="flex-1">
+                                <span className="bg-slate-100 text-slate-600 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md inline-block mb-2">{soal.tipe.replace('_', ' ')}</span>
+                                <p className={`font-medium mb-3 ${isArabic(soal.pertanyaan) ? 'font-arabic text-xl' : 'font-latin text-sm text-slate-800'}`}>
+                                   {i+1}. {soal.pertanyaan}
+                                </p>
+                             </div>
+                             <div className={`px-3 py-1 rounded-lg border text-[10px] font-black uppercase tracking-widest shrink-0 ${badgeColor}`}>
+                                {isCorrect ? 'BENAR' : 'SALAH / KOSONG'}
+                             </div>
+                          </div>
+                          
+                          <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl">
+                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Jawaban Peserta:</p>
+                             <p className="text-sm font-bold text-slate-800">{textJawaban}</p>
+                          </div>
+                       </div>
+                    )
+                 })}
+
               </div>
            </div>
         </div>
@@ -635,5 +769,4 @@ export default function CbtManagerPage() {
   );
 }
 
-// Komponen Pembantu Render SVG Icon
 const LockIcon = ({size, className}:any) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>;
