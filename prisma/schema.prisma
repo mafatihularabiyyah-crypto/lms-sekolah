@@ -1,0 +1,315 @@
+// prisma/schema.prisma
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --- TABEL LMS --- //
+
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  domain      String?  @unique
+  users       User[]
+  courses     Course[]
+  createdAt   DateTime @default(now())
+}
+
+enum Role {
+  ADMIN
+  GURU
+  SANTRI
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  image     String?  @db.Text
+  password  String   
+  role      String   @default("ADMIN")
+  
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  
+  courses        Course[]       @relation("CourseTeacher")
+  enrollments    Enrollment[]
+  attendances    Attendance[]
+  studentProfile StudentProfile? 
+  teacherProfile TeacherProfile?
+}
+
+model Course {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  
+  teacherId   String
+  teacher     User     @relation("CourseTeacher", fields: [teacherId], references: [id])
+  
+  enrollments Enrollment[]
+  materials   Material[]
+  sessions    Session[]
+}
+
+model Enrollment {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id])
+  
+  @@unique([userId, courseId]) 
+}
+
+// --- FITUR MATERI & PRESENSI --- //
+
+enum MaterialType {
+  VIDEO
+  DOCUMENT
+  LINK
+}
+
+model Material {
+  id        String       @id @default(cuid())
+  title     String
+  type      MaterialType 
+  url       String?      
+  content   String?      
+  createdAt DateTime     @default(now())
+  
+  courseId  String
+  course    Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id          String       @id @default(cuid())
+  title       String       
+  date        DateTime     @default(now())
+  
+  courseId    String
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  attendances Attendance[]
+}
+
+enum AttendanceStatus {
+  HADIR
+  IZIN
+  SAKIT
+  ALPA
+}
+
+model Attendance {
+  id        String           @id @default(cuid())
+  status    AttendanceStatus @default(HADIR)
+  
+  sessionId String
+  session   Session          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId]) 
+}
+
+// --- FITUR PROFIL AKADEMIK --- //
+
+enum Gender {
+  LAKI_LAKI
+  PEREMPUAN
+}
+
+enum StudentStatus {
+  AKTIF
+  CUTI
+  LULUS
+  KELUAR
+}
+
+model StudentProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  nis             String   @unique
+  gender          Gender
+  enrollYear      Int
+  parentName      String?
+  parentPhone     String?
+  address         String?
+  birthPlace      String?  // Kolom kesibukan santri
+  status          StudentStatus @default(AKTIF)
+
+  // UBAH BAGIAN INI: Menjadi array agar bisa menampung banyak kelas sekaligus
+  classes         ClassRoom[]  
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model TeacherProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  nip       String?
+  gender    Gender?
+  subject   String?  // Untuk Mata Pelajaran (Spesialisasi)
+  phone     String?
+  address   String?
+  status    String?  @default("Aktif") // Aktif, Cuti, Nonaktif
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ClassRoom {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  program         String?
+  pengajar        String?
+  jadwal          String?
+  kkm             Int      @default(75)
+  kapasitas       Int      @default(30)
+  isFinished      Boolean  @default(false)
+  
+  // Konfigurasi Tambahan
+  weights         Json?    // Menyimpan bobot { tugas: 20, uts: 30, uas: 50, jmlTugas: 1 }
+  waGroupLink     String?
+  zoomLink        String?
+  certBackground  String?  // Menyimpan gambar background sertifikat (Base64)
+  
+  // Relasi Data
+  students        StudentProfile[]
+  materials       LearningMaterial[]
+  attendances     ClassAttendance[]
+  grades          ClassGrade[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model LearningMaterial {
+  id          String   @id @default(cuid())
+  classRoomId String
+  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  
+  title       String
+  description String?
+  youtubeLink String?  // Link Video
+  fileUrl     String?  // <--- BARU: Link File PDF / Google Drive / Dokumen
+  isPublished Boolean  @default(true)
+  order       Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CbtExam {
+  id          String    @id @default(cuid())
+  judul       String
+  deskripsi   String?
+  coverImage  String?
+  token       String?
+  durasi      Int       @default(60)
+  kkm         Int       @default(75)
+  acakSoal    Boolean   @default(true)
+  antiCheat   Boolean   @default(true)
+  butuhToken  Boolean   @default(true)
+  deadline    DateTime?
+  isAktif     Boolean   @default(true)
+  namaKelas   String?   // Menyimpan kelas target (pisahkan dengan koma)
+  
+  dataSoal    Json      // Menyimpan seluruh struktur soal (Array of Objects)
+  
+  results     CbtResult[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model CbtResult {
+  id            String   @id @default(cuid())
+  examId        String
+  exam          CbtExam  @relation(fields: [examId], references: [id], onDelete: Cascade)
+  
+  namaPeserta   String
+  emailPeserta  String
+  
+  nilai         Float    @default(0)
+  detailJawaban Json     // Menyimpan jawaban mentah peserta
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model ClassAttendance {
+  id          String    @id @default(cuid())
+  classRoomId String
+  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  studentId   String
+  
+  hadir       Int       @default(0)
+  sakit       Int       @default(0)
+  izin        Int       @default(0)
+  alpa        Int       @default(0)
+
+  @@unique([classRoomId, studentId]) // 1 Santri = 1 Record Presensi per Kelas
+}
+
+model ClassGrade {
+  id          String    @id @default(cuid())
+  classRoomId String
+  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  studentId   String
+  
+  tugas1      Float?
+  tugas2      Float?
+  tugas3      Float?
+  tugas4      Float?
+  tugas5      Float?
+  uts         Float?
+  uas         Float?
+  nilaiAkhir  Float?
+
+  @@unique([classRoomId, studentId]) // 1 Santri = 1 Rapor per Kelas
+}
+
+model SystemSettings {
+  id          String   @id @default("default") // Hanya ada 1 baris (singleton)
+  schoolName  String   @default("LMS Pesantren")
+  schoolLogo  String?  @db.Text // Base64 image
+  updatedAt   DateTime @updatedAt
+}
+
+// Tabel untuk menyimpan kerangka formulir (Pertanyaan)
+model Formulir {
+  id          String   @id @default(cuid())
+  judul       String
+  deskripsi   String?
+  coverImage  String?
+  struktur    Json     // Menyimpan array pertanyaan (teks, pilihan ganda, dll)
+  isAktif     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  respon      ResponFormulir[]
+}
+
+// Tabel untuk menyimpan jawaban dari pendaftar
+model ResponFormulir {
+  id          String   @id @default(cuid())
+  formulirId  String
+  formulir    Formulir @relation(fields: [formulirId], references: [id], onDelete: Cascade)
+  dataRespon  Json     // Menyimpan jawaban pendaftar
+  isDiterima  Boolean  @default(false) // Status apakah sudah dijadikan santri
+  createdAt   DateTime @default(now())
+}

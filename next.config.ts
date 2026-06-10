@@ -1,7 +1,13 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  /* config options here */
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '5mb', // Perbesar batas menjadi 5 Megabyte
+    },
+  },
 };
 
 export default nextConfig;
+// (Ganti formatnya dengan module.exports jika file Anda .js biasa)
