@@ -30,15 +30,16 @@ export default function Sidebar() {
         { name: "Data Kelas & Rombel", icon: BookOpen, href: "/admin/courses" },
         { name: "Materi Pembelajaran", icon: FileVideo, href: "/admin/materials" },
         { name: "Tugas & Ujian (CBT)", icon: ClipboardEdit, href: "/admin/cbt" },
-        { name: "Nilai dan Presensi ", icon: CalendarCheck, href: "/admin/report" },
+        { name: "Nilai dan Presensi", icon: CalendarCheck, href: "/admin/report" },
+        { name: "Buku Pembelajaran", icon: BookOpen, href: "/admin/buku" },
       ]
     },
     {
       label: "Administrasi",
       items: [
         { name: "Dokumen Rapor", icon: Archive, href: "/admin/rapor" },
-        { name: "Arsip & Leger Nilai", icon: Archive, href: "/admin/archives" },
-        { name: "Keuangan & Tagihan", icon: CreditCard, href: "/admin/finance" },
+        { name: "Informasi & Pengumuman", icon: Archive, href: "/admin/informasi" },
+        { name: "Keuangan & Tagihan", icon: CreditCard, href: "/admin/keuangan" },
       ]
     }
   ];

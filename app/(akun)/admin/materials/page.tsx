@@ -28,6 +28,7 @@ export default function KelolaPembelajaranPage() {
   const [copySourceClassId, setCopySourceClassId] = useState("");
   const [sourceMaterials, setSourceMaterials] = useState<any[]>([]);
   const [selectedCopyIds, setSelectedCopyIds] = useState<string[]>([]);
+  
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [classLinks, setClassLinks] = useState({ zoom: "", wa: "" });
 
@@ -38,7 +39,9 @@ export default function KelolaPembelajaranPage() {
     setIsLoading(false);
   };
 
-  useEffect(() => { loadInitialData(); }, []);
+  useEffect(() => { 
+    loadInitialData(); 
+  }, []);
 
   const selectClassToManage = async (classId: string) => {
     setIsLoading(true);
@@ -72,7 +75,9 @@ export default function KelolaPembelajaranPage() {
   const filteredMaterials = useMemo(() => {
     return materials.filter(m => {
       const matchSearch = m.title.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchStatus = filterStatus === "SEMUA" ? true : filterStatus === "PUBLISHED" ? m.isPublished : !m.isPublished;
+      const matchStatus = filterStatus === "SEMUA" 
+        ? true 
+        : filterStatus === "PUBLISHED" ? m.isPublished : !m.isPublished;
       return matchSearch && matchStatus;
     });
   }, [materials, searchQuery, filterStatus]);
@@ -112,7 +117,10 @@ export default function KelolaPembelajaranPage() {
 
   const handleToggleClassStatus = async () => {
     const isFinished = !selectedClass.isFinished;
-    const msg = isFinished ? "Tandai kelas ini telah Selesai? Kelas akan diarsipkan." : "Buka kembali kelas ini menjadi Aktif?";
+    const msg = isFinished 
+      ? "Tandai kelas ini telah Selesai? Kelas akan diarsipkan." 
+      : "Buka kembali kelas ini menjadi Aktif?";
+      
     if (confirm(msg)) {
       setIsLoading(true);
       await toggleClassStatusDB(selectedClass.id, isFinished);
@@ -129,6 +137,7 @@ export default function KelolaPembelajaranPage() {
     const temp = newMaterials[index];
     newMaterials[index] = newMaterials[swapIndex];
     newMaterials[swapIndex] = temp;
+    
     setMaterials(newMaterials);
     await updateMaterialOrderDB(newMaterials.map(m => m.id));
     setIsLoading(false);
@@ -156,6 +165,7 @@ export default function KelolaPembelajaranPage() {
     await selectClassToManage(selectedClass.id);
   };
 
+  // Tampilan Daftar Kelas
   if (!selectedClass) {
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
@@ -173,14 +183,17 @@ export default function KelolaPembelajaranPage() {
           <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 text-amber-500 animate-spin" /></div>
         ) : (
           <>
-            <div className="mb-4"><h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest border-b border-slate-200 pb-2">Halaqah / Kelas Aktif</h3></div>
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest border-b border-slate-200 pb-2">Halaqah / Kelas Aktif</h3>
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
               {activeClasses.length === 0 && <p className="text-sm text-slate-400 font-medium">Tidak ada kelas aktif.</p>}
               {activeClasses.map(c => (
                 <div key={c.id} onClick={() => selectClassToManage(c.id)} className="bg-white border border-slate-200 rounded-3xl p-6 hover:shadow-xl hover:border-amber-200 transition-all cursor-pointer group">
                   <div className="flex justify-between items-start mb-4">
                     <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center"><BookOpen size={24}/></div>
-                    <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2.5 py-1 rounded-md uppercase tracking-widest">{c.waliKelas || "No Wali"}</span>
+                    <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2.5 py-1 rounded-md uppercase tracking-widest">{c.pengajar || c.waliKelas || "Belum Ditentukan"}</span>
                   </div>
                   <h3 className="text-xl font-black text-slate-800 mb-1">{c.name}</h3>
                   <p className="text-sm font-bold text-slate-500 mb-6">{c._count.students} Santri Terdaftar</p>
@@ -194,7 +207,11 @@ export default function KelolaPembelajaranPage() {
 
             {finishedClasses.length > 0 && (
               <>
-                <div className="mb-4"><h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2 flex items-center gap-2"><CheckCircle2 size={16}/> Arsip Kelas (Telah Selesai)</h3></div>
+                <div className="mb-4">
+                  <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2 flex items-center gap-2">
+                    <CheckCircle2 size={16}/> Arsip Kelas (Telah Selesai)
+                  </h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {finishedClasses.map(c => (
                     <div key={c.id} onClick={() => selectClassToManage(c.id)} className="bg-slate-50 border border-slate-200 rounded-3xl p-6 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all cursor-pointer group">
@@ -218,6 +235,7 @@ export default function KelolaPembelajaranPage() {
     );
   }
 
+  // Tampilan Manajemen Materi Dalam Kelas
   return (
     <Fragment>
       {isLoading && (
@@ -229,6 +247,7 @@ export default function KelolaPembelajaranPage() {
         </div>
       )}
 
+      {/* Modal Edit / Tambah Materi */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm cursor-pointer" onClick={() => setIsModalOpen(false)}></div>
@@ -271,6 +290,7 @@ export default function KelolaPembelajaranPage() {
         </div>
       )}
 
+      {/* Modal Edit Links */}
       {isLinkModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm cursor-pointer" onClick={() => setIsLinkModalOpen(false)}></div>
@@ -294,6 +314,7 @@ export default function KelolaPembelajaranPage() {
         </div>
       )}
 
+      {/* Modal Copy Materi */}
       {isCopyModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm cursor-pointer" onClick={() => setIsCopyModalOpen(false)}></div>
@@ -332,6 +353,7 @@ export default function KelolaPembelajaranPage() {
         </div>
       )}
 
+      {/* Main Content Area */}
       <div className="space-y-6 animate-in fade-in duration-500">
         <div className="flex justify-between items-center bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-sm">
           <button onClick={() => { setSelectedClass(null); loadInitialData(); }} className="flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-amber-600 transition-colors cursor-pointer">
@@ -350,15 +372,49 @@ export default function KelolaPembelajaranPage() {
             <div>
               <span className="bg-amber-100 text-amber-700 text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-full mb-4 inline-block">{selectedClass.isFinished ? "ARSIP KELAS" : "DASHBOARD KELAS"}</span>
               <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-[1.1] mb-2">{selectedClass.name}</h1>
-              <p className="text-slate-500 font-medium">Pengajar Utama: <span className="font-bold text-slate-800">{selectedClass.waliKelas}</span></p>
+              <p className="text-slate-500 font-medium">Pengajar Utama: <span className="font-bold text-slate-800">{selectedClass.pengajar || selectedClass.waliKelas || "Belum Ditentukan"}</span></p>
             </div>
             
             <div className="flex flex-col gap-3 min-w-[250px]">
-               {!selectedClass.isFinished && <button onClick={() => setIsLinkModalOpen(true)} className="text-xs font-bold text-slate-400 hover:text-amber-600 text-right cursor-pointer w-fit self-end">Edit Jalur Komunikasi</button>}
-               <a href={selectedClass.waGroupLink || "#"} target="_blank" rel="noreferrer" className="flex items-center gap-3 bg-[#E8F8F5] text-[#0E6655] p-3 rounded-xl border border-[#A3E4D7] hover:bg-[#D1F2EB] transition group cursor-pointer shadow-sm">
-                  <div className="bg-[#1ABC9C] text-white p-1.5 rounded-lg group-hover:scale-110 transition"><MessageCircle size={16}/></div>
-                  <div><p className="text-xs font-black uppercase tracking-widest leading-none">Grup WhatsApp</p><p className="text-[10px] opacity-80 mt-1">{selectedClass.waGroupLink ? "Buka Grup Komunikasi" : "Belum diatur"}</p></div>
-               </a>
+               {!selectedClass.isFinished && (
+                 <button onClick={() => setIsLinkModalOpen(true)} className="text-xs font-bold text-slate-400 hover:text-amber-600 text-right cursor-pointer w-fit self-end">
+                   Edit Jalur Komunikasi
+                 </button>
+               )}
+               
+               {/* Container Tombol Komunikasi (Bisa 1 atau 2 tombol berderet ke bawah) */}
+               <div className="flex flex-col gap-2">
+                 
+                 {/* TOMBOL WHATSAPP (Muncul jika link ada) */}
+                 {selectedClass.waGroupLink && (
+                   <a href={selectedClass.waGroupLink} target="_blank" rel="noreferrer" className="flex items-center gap-3 bg-[#E8F8F5] text-[#0E6655] p-3 rounded-xl border border-[#A3E4D7] hover:bg-[#D1F2EB] transition group cursor-pointer shadow-sm">
+                      <div className="bg-[#1ABC9C] text-white p-1.5 rounded-lg group-hover:scale-110 transition"><MessageCircle size={16}/></div>
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-widest leading-none">Grup WhatsApp</p>
+                        <p className="text-[10px] opacity-80 mt-1">Buka Grup Komunikasi</p>
+                      </div>
+                   </a>
+                 )}
+
+                 {/* TOMBOL ZOOM (Muncul jika link ada) */}
+                 {selectedClass.zoomLink && (
+                   <a href={selectedClass.zoomLink} target="_blank" rel="noreferrer" className="flex items-center gap-3 bg-blue-50 text-blue-700 p-3 rounded-xl border border-blue-200 hover:bg-blue-100 transition group cursor-pointer shadow-sm">
+                      <div className="bg-blue-600 text-white p-1.5 rounded-lg group-hover:scale-110 transition"><Video size={16}/></div>
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-widest leading-none">Live Class Zoom</p>
+                        <p className="text-[10px] opacity-80 mt-1">Masuk Ruang Virtual</p>
+                      </div>
+                   </a>
+                 )}
+
+                 {/* PESAN JIKA KEDUANYA KOSONG */}
+                 {(!selectedClass.waGroupLink && !selectedClass.zoomLink) && (
+                   <div className="text-right p-3 border border-dashed border-slate-200 rounded-xl bg-slate-50">
+                     <p className="text-xs font-medium text-slate-400 italic">Jalur komunikasi belum diatur.</p>
+                   </div>
+                 )}
+
+               </div>
             </div>
           </div>
         </div>

@@ -363,7 +363,6 @@ export default function RaporManagerPage() {
                 <tr>
                   <th className="border-2 border-slate-900 print:border-black py-2.5 px-3 text-center w-12">No</th>
                   <th className="border-2 border-slate-900 print:border-black py-2.5 px-3">Kelas / Mata Pelajaran</th>
-                  <th className="border-2 border-slate-900 print:border-black py-2.5 px-3 text-center w-28">Program</th>
                   <th className="border-2 border-slate-900 print:border-black py-2.5 px-3 text-center w-20">Angka</th>
                   <th className="border-2 border-slate-900 print:border-black py-2.5 px-3 text-center w-24">Huruf Mutu</th>
                 </tr>
@@ -377,7 +376,6 @@ export default function RaporManagerPage() {
                     <tr key={g.id}>
                       <td className="border border-slate-400 print:border-black py-2 px-3 text-center">{i + 1}</td>
                       <td className="border border-slate-400 print:border-black py-2 px-3 font-bold">{g.classRoom?.name || "-"}</td>
-                      <td className="border border-slate-400 print:border-black py-2 px-3 text-center italic">{g.classRoom?.program || "-"}</td>
                       <td className="border border-slate-400 print:border-black py-2 px-3 text-center font-black tabular-nums text-sm">{g.nilaiAkhir || 0}</td>
                       <td className="border border-slate-400 print:border-black py-2 px-3 text-center font-black">
                         <span className={`print:text-black ${p.warna}`}>{p.huruf}</span>
@@ -389,9 +387,7 @@ export default function RaporManagerPage() {
               {grades.length > 0 && (
                 <tfoot className="bg-slate-50 print:bg-gray-100 font-black">
                   <tr>
-                    <td colSpan={3} className="border-2 border-slate-900 print:border-black py-3 px-4 text-right uppercase tracking-widest text-[10px]">
-                      Indeks Prestasi / Rata-rata Akhir
-                    </td>
+                    <td colSpan={3} className="border border-black p-2 text-right font-bold">RATA-RATA AKHIR</td>
                     <td colSpan={2} className="border-2 border-slate-900 print:border-black py-3 px-4 text-center text-lg text-indigo-700 print:text-black">
                       {avgNilai}
                     </td>

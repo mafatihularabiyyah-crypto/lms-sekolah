@@ -1,15 +1,16 @@
-// app/(akun)/santri/page.tsx
 import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { BookOpen, GraduationCap, Clock, FileText, CheckCircle2 } from "lucide-react";
+import { 
+  BookOpen, GraduationCap, FileText, 
+  Sparkles, TrendingUp, ChevronRight, Calendar, User
+} from "lucide-react";
 
 export default async function DashboardSantri() {
-  // 1. Ambil sesi login santri
   const session = await getServerSession();
   if (!session?.user?.email) redirect("/login");
+  const userId = (session.user as any).id;
 
-  // 2. Tarik data profil santri & sinkronisasi dengan kelasnya
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
     include: {
@@ -17,8 +18,8 @@ export default async function DashboardSantri() {
         include: {
           classes: {
             include: {
-              materials: { orderBy: { createdAt: 'desc' }, take: 4 }, // Ambil 4 materi terbaru
-              grades: { where: { studentId: (session.user as any).id } },
+              materials: { orderBy: { createdAt: 'desc' }, take: 4 },
+              grades: { where: { studentId: userId } },
             }
           }
         }
@@ -31,93 +32,127 @@ export default async function DashboardSantri() {
   const profil = user.studentProfile;
   const kelasku = profil?.classes || [];
 
-  // 3. Kalkulasi Statistik Ringkas
   const totalKelas = kelasku.length;
-  let totalMateri = 0;
-  
-  // Mengumpulkan materi terbaru dari semua kelas
   const materiTerbaru = kelasku.flatMap(k => 
     k.materials.map(m => ({ ...m, namaKelas: k.name }))
-  ).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 5);
+  ).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 4);
+
+  let totalNilai = 0;
+  let jumlahNilai = 0;
+  kelasku.forEach((k: any) => {
+    k.grades.forEach((g: any) => {
+      totalNilai += g.nilaiAkhir || 0;
+      jumlahNilai++;
+    });
+  });
+  const rataRata = jumlahNilai > 0 ? Math.round(totalNilai / jumlahNilai) : 0;
+  const today = new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
   return (
-    <div className="max-w-5xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-700 font-sans pb-10">
       
-      {/* Header Sambutan */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-3xl p-8 text-white shadow-xl shadow-emerald-600/20 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-        <div className="relative z-10">
-          <h1 className="text-3xl font-black mb-2">Ahlan wa Sahlan, {user.name}!</h1>
-          <p className="text-emerald-100 font-medium">Semoga hari ini penuh berkah. Jangan lupa untuk mengecek materi terbaru Anda.</p>
-          
-          <div className="mt-6 flex flex-wrap gap-3">
-            <span className="bg-black/20 backdrop-blur-md px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Status: {profil?.status || "Aktif"}
-            </span>
-            <span className="bg-black/20 backdrop-blur-md px-4 py-2 rounded-xl text-sm font-bold">
-              NIS: {profil?.nis || "Belum diatur"}
-            </span>
+      {/* HEADER: Ultra Clean Welcome Card */}
+      <div className="bg-white rounded-[2.5rem] p-8 md:p-12 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-bl from-slate-50 to-transparent rounded-full -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
+        
+        <div className="relative z-10 space-y-4">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-50 border border-slate-100 text-xs font-bold uppercase tracking-widest text-slate-500">
+            <Calendar size={14} /> {today}
           </div>
+          <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+            Halo, {user.name.split(' ')[0]} <Sparkles className="text-indigo-400" size={32} />
+          </h1>
+          <p className="text-slate-500 text-lg max-w-xl leading-relaxed">
+            Selamat datang kembali di portal belajar Anda. Lanjutkan progres luar biasa Anda hari ini.
+          </p>
+        </div>
+
+        {/* Minimalist Profile Widget */}
+        <div className="relative z-10 flex items-center gap-5 p-6 bg-slate-50 rounded-3xl border border-slate-100 min-w-[280px]">
+           <div className="w-16 h-16 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-indigo-600">
+              <User size={28} />
+           </div>
+           <div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Status Akademik</p>
+              <div className="flex items-center gap-2">
+                 <span className="relative flex h-2.5 w-2.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span></span>
+                 <p className="font-bold text-slate-800">{profil?.status || "Aktif"}</p>
+              </div>
+              <p className="text-xs font-medium text-slate-500 mt-1">NIS: {profil?.nis || "-"}</p>
+           </div>
         </div>
       </div>
 
-      {/* Widget Statistik Ringkas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-5">
-          <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shrink-0">
-            <BookOpen size={24} />
+      {/* QUICK STATS: Modern Borderless Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col items-start hover:-translate-y-1 transition-transform duration-300">
+          <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-6">
+            <BookOpen size={20} strokeWidth={2.5} />
           </div>
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Kelas Aktif</p>
-            <h3 className="text-2xl font-black text-slate-800">{totalKelas} Kelas</h3>
-          </div>
-        </div>
-        
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-5">
-          <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center shrink-0">
-            <GraduationCap size={24} />
-          </div>
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Rata-rata Nilai</p>
-            <h3 className="text-2xl font-black text-slate-800">Cek Rapor</h3>
-          </div>
+          <h3 className="text-4xl font-black text-slate-900 mb-1">{totalKelas}</h3>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Kelas Aktif</p>
         </div>
 
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-5">
-          <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shrink-0">
-            <CheckCircle2 size={24} />
+        <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col items-start hover:-translate-y-1 transition-transform duration-300">
+          <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-6">
+            <GraduationCap size={22} strokeWidth={2.5} />
           </div>
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Tugas Selesai</p>
-            <h3 className="text-2xl font-black text-slate-800">Real-time</h3>
+          <div className="flex items-end gap-3 mb-1">
+            <h3 className="text-4xl font-black text-slate-900">{rataRata}</h3>
+            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg mb-1 flex items-center gap-1">
+              <TrendingUp size={12}/> Top 10%
+            </span>
           </div>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Rata-rata Nilai</p>
+        </div>
+
+        {/* Wide Progress Card */}
+        <div className="md:col-span-2 bg-white p-6 md:p-8 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col justify-center">
+           <div className="flex justify-between items-end mb-4">
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Target Pembelajaran</p>
+                <h3 className="text-xl font-bold text-slate-800">Progres Semester Genap</h3>
+              </div>
+              <span className="text-3xl font-black text-indigo-600">85%</span>
+           </div>
+           <div className="w-full h-3 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
+              <div className="h-full bg-indigo-500 rounded-full w-[85%] relative"></div>
+           </div>
         </div>
       </div>
 
-      {/* Area Bawah: Materi Terbaru & Jadwal */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* FEED & CLASSES SECTION */}
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-8">
         
-        {/* Kolom 1: Materi Terbaru */}
-        <div className="bg-white rounded-3xl p-7 shadow-sm border border-slate-100">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
-              <FileText className="text-emerald-500" size={20} /> Materi Terbaru
-            </h2>
+        {/* Kolom Kiri: Feed Pembelajaran (Lebar 3/5) */}
+        <div className="xl:col-span-3 bg-white rounded-[2.5rem] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-xl font-black text-slate-900">Aktivitas Terbaru</h2>
+            <button className="text-xs font-bold text-indigo-600 hover:text-indigo-700 transition-colors flex items-center gap-1">
+              Lihat Semua <ChevronRight size={14}/>
+            </button>
           </div>
           
-          <div className="space-y-4">
+          <div className="space-y-6">
             {materiTerbaru.length === 0 ? (
-              <p className="text-sm text-slate-500 italic text-center py-6 bg-slate-50 rounded-xl">Belum ada materi baru dari Ustadz/Ustadzah.</p>
+              <p className="text-sm text-slate-400 font-medium text-center py-8">Belum ada aktivitas baru.</p>
             ) : (
               materiTerbaru.map((materi) => (
-                <div key={materi.id} className="flex gap-4 p-4 rounded-2xl hover:bg-slate-50 transition border border-transparent hover:border-slate-100 group">
-                  <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <div key={materi.id} className="group flex gap-5 p-4 -mx-4 rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer">
+                  <div className="w-12 h-12 bg-slate-50 border border-slate-100 text-slate-400 rounded-2xl flex items-center justify-center shrink-0 group-hover:bg-white group-hover:text-indigo-600 group-hover:border-indigo-100 transition-all shadow-sm">
                     <FileText size={20} />
                   </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-800 mb-1">{materi.title}</h4>
-                    <p className="text-[11px] font-bold text-emerald-600 mb-1">{materi.namaKelas}</p>
-                    <p className="text-xs text-slate-500 line-clamp-1">{materi.description}</p>
+                  <div className="flex-1 border-b border-slate-100 pb-5 group-last:border-0">
+                    <div className="flex justify-between items-start mb-1">
+                      <h4 className="text-base font-bold text-slate-800 group-hover:text-indigo-700 transition-colors">{materi.title}</h4>
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' }).format(materi.createdAt)}
+                      </span>
+                    </div>
+                    <span className="inline-block text-[10px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100/50 mb-2">
+                      {materi.namaKelas}
+                    </span>
+                    <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed">{materi.description || "Silakan cek materi ini."}</p>
                   </div>
                 </div>
               ))
@@ -125,27 +160,25 @@ export default async function DashboardSantri() {
           </div>
         </div>
 
-        {/* Kolom 2: Info Kelas */}
-        <div className="bg-white rounded-3xl p-7 shadow-sm border border-slate-100">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
-              <Clock className="text-blue-500" size={20} /> Kelas Saya
-            </h2>
-          </div>
+        {/* Kolom Kanan: Daftar Kelas (Lebar 2/5) */}
+        <div className="xl:col-span-2 bg-slate-900 rounded-[2.5rem] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.08)] text-white relative overflow-hidden flex flex-col">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+          
+          <h2 className="text-xl font-black text-white mb-8 relative z-10">Daftar Kelasku</h2>
 
-          <div className="space-y-3">
+          <div className="space-y-4 flex-1 relative z-10">
             {kelasku.length === 0 ? (
-              <p className="text-sm text-slate-500 italic text-center py-6 bg-slate-50 rounded-xl">Anda belum didaftarkan ke kelas manapun.</p>
+              <p className="text-sm text-slate-400 font-medium">Anda belum terdaftar di kelas manapun.</p>
             ) : (
               kelasku.map((kelas) => (
-                <div key={kelas.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <div key={kelas.id} className="flex items-center justify-between p-5 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-colors cursor-pointer group">
                   <div>
-                    <h4 className="text-sm font-bold text-slate-800">{kelas.name}</h4>
-                    <p className="text-[11px] text-slate-500 font-medium mt-0.5">Pengajar: {kelas.pengajar || "-"}</p>
+                    <h4 className="text-sm font-bold text-white mb-1">{kelas.name}</h4>
+                    <p className="text-xs text-slate-400">Ust. {kelas.pengajar || "-"}</p>
                   </div>
-                  <span className="px-3 py-1 bg-white border border-slate-200 text-slate-600 text-[10px] font-bold rounded-lg shadow-sm">
-                    {kelas.jadwal || "Sesuai Jadwal"}
-                  </span>
+                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-indigo-500 transition-colors">
+                    <ChevronRight size={16} className="text-slate-300 group-hover:text-white" />
+                  </div>
                 </div>
               ))
             )}
@@ -153,7 +186,6 @@ export default async function DashboardSantri() {
         </div>
 
       </div>
-
     </div>
   );
 }

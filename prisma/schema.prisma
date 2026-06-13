@@ -25,6 +25,11 @@ model Tenant {
   classRooms      ClassRoom[]
   cbtExams        CbtExam[]
   systemSettings  SystemSettings?
+  materi          Materi[]
+  pengumuman      Pengumuman[]
+  tagihan         Tagihan[]
+  paymentSetting  PaymentSetting?
+  buku            Buku[]
 }
 
 enum Role {
@@ -160,6 +165,7 @@ model StudentProfile {
   status         StudentStatus @default(AKTIF)
 
   classes        ClassRoom[]  
+  tagihan        Tagihan[]
 
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
@@ -207,6 +213,8 @@ model ClassRoom {
   materials      LearningMaterial[]
   attendances    ClassAttendance[]
   grades         ClassGrade[]
+  materi         Materi[]
+  tagihan        Tagihan[]
   
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
@@ -300,6 +308,7 @@ model ClassGrade {
   uts         Float?
   uas         Float?
   nilaiAkhir  Float?
+  certLink    String?
 
   @@unique([classRoomId, studentId]) 
 }
@@ -321,4 +330,92 @@ model SystemSettings {
   kepsekTtd   String?  @db.Text 
 
   updatedAt   DateTime @updatedAt
+}
+
+model Materi {
+  id          String    @id @default(cuid())
+  judul       String
+  deskripsi   String?   @db.Text
+  tipe        String    // Wajib diisi dengan: "PDF", "VIDEO", "LINK", atau "DOC"
+  fileUrl     String    // Link URL file, Google Drive, atau YouTube
+  
+  // Relasi ke Kelas
+  classRoomId String
+  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  
+  // Keamanan Institusi
+  tenantId    String    
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Pengumuman {
+  id        String   @id @default(cuid())
+  judul     String
+  konten    String   @db.Text
+  kategori  String   // Contoh: "PROMO", "KAJIAN", "BERITA", "INFO"
+  imageUrl  String?  @db.Text // Untuk menyimpan poster/gambar (Base64/URL)
+  actionLink  String?
+  isActive  Boolean  @default(true)
+  
+  // Relasi Multi-Tenant (Sangat Penting)
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Tagihan {
+  id          String   @id @default(cuid())
+  tipe        String   // Contoh: "BULANAN", "TAHUNAN"
+  judul       String   // Contoh: "SPP Agustus 2026"
+  nominal     Int
+  status      String   @default("BELUM_BAYAR") // "BELUM_BAYAR" atau "LUNAS"
+  
+  // Relasi
+  studentId   String
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  classRoomId String?
+  classRoom   ClassRoom? @relation(fields: [classRoomId], references: [id], onDelete: SetNull)
+
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PaymentSetting {
+  id          String   @id @default(cuid())
+  qrisUrl     String?  @db.Text
+  bankName    String?
+  bankAccount String?
+  accountName String?
+  
+  tenantId    String   @unique
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model Buku {
+  id            String   @id @default(cuid())
+  judul         String
+  deskripsi     String?  @db.Text
+  coverUrl      String?  @db.Text
+  
+  isFisik       Boolean  @default(false) // Penanda: false = Digital (PDF), true = Buku Fisik
+  fileUrl       String?  // Tautan file PDF (Kosong jika buku fisik)
+  nomorWa       String?  // Nomor WA Admin (Kosong jika modul digital)
+  
+  hargaNormal   Int      @default(0)
+  potonganHarga Int      @default(0) // Inputan berupa nominal potongan (misal: 10000)
+  
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

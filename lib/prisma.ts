@@ -11,12 +11,13 @@ declare global {
 const connectionString = `${process.env.DATABASE_URL}`;
 
 // 1. Pastikan Pool PostgreSQL hanya dibuat SATU KALI di memory global (Mencegah Kebocoran)
+// 1. Pastikan Pool PostgreSQL hanya dibuat SATU KALI di memory global (Mencegah Kebocoran)
 if (!globalThis.globalPgPool) {
   globalThis.globalPgPool = new Pool({ 
     connectionString,
     max: 10, // Batasi maksimal 10 koneksi per instance
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+    connectionTimeoutMillis: 10000, // <--- UBAH MENJADI 10000 (10 Detik)
   });
 }
 
