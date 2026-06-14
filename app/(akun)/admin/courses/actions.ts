@@ -156,12 +156,12 @@ export async function getStudentsForPlottingDB(classId: string) {
       orderBy: { name: 'asc' }
     });
 
-    const data = students.map(u => ({
+    const data = students.map((u: any) => ({
       id: u.studentProfile?.id || "",
       nama: u.name,
       nis: u.studentProfile?.nis || "-",
-      isEnrolled: u.studentProfile?.classes.some(c => c.id === classId) || false
-    })).filter(s => s.id !== "");
+      isEnrolled: u.studentProfile?.classes.some((c: any) => c.id === classId) || false
+    })).filter((s: any) => s.id !== "");
 
     return { success: true, data };
   } catch (error) {
