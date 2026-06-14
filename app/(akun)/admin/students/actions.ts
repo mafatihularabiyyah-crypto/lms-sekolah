@@ -84,7 +84,7 @@ export async function saveSiswaDB(data: any) {
         if (cekNis) return { success: false, error: "NIS tersebut sudah digunakan siswa lain." };
       }
 
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         // Update Profil
         await tx.studentProfile.update({
           where: { id: data.id },
