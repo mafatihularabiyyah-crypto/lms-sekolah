@@ -34,7 +34,7 @@ export async function getClassesDB() {
     });
 
     // Mapping: Mengubah format database baru agar bisa dibaca UI lama
-    const data = classes.map(c => ({
+    const data = classes.map((c: any) => ({
       id: c.id,
       nama: c.name,
       waliKelas: c.pengajar || "Belum Ditentukan",
