@@ -104,7 +104,7 @@ export async function deleteMaterialDB(id: string) {
 export async function copyMaterialsDB(targetClassId: string, materialIdsToCopy: string[]) {
   try {
     const materials = await prisma.learningMaterial.findMany({ where: { id: { in: materialIdsToCopy } } });
-    const newMaterials = materials.map((m, idx) => ({
+    const newMaterials = materials.map((m: any, idx) => ({
       classRoomId: targetClassId,
       title: m.title + " (Copy)",
       description: m.description,
