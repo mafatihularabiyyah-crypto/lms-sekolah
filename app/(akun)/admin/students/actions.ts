@@ -119,7 +119,7 @@ export async function saveSiswaDB(data: any) {
       const defaultPassword = data.password || data.nis || "123456";
       const hashedPassword = await bcrypt.hash(defaultPassword.toString(), 10);
 
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         const newUser = await tx.user.create({
           data: {
             email: autoEmail,
@@ -288,7 +288,7 @@ export async function importSiswaMassalDB(dataArray: any[]) {
       const existingNis = await prisma.studentProfile.findFirst({ where: { tenantId, nis: data.NIS.toString() } });
       
       if (!existingUser && !existingNis) {
-        await prisma.$transaction(async (tx) => {
+        await prisma.$transaction(async (tx: any) => {
           const newUser = await tx.user.create({
             data: {
               email: autoEmail,
