@@ -189,7 +189,7 @@ export async function deleteSiswaMassalDB(studentProfileIds: string[]) {
       select: { userId: true }
     });
 
-    const userIds = profiles.map(p => p.userId);
+    const userIds = profiles.map((p: any) => p.userId);
 
     // Hapus massal dari tabel User
     await prisma.user.deleteMany({
