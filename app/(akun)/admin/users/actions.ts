@@ -153,3 +153,48 @@ export async function deleteGuru(id: string) {
 
   revalidatePath("/admin/users");
 }
+
+// === TAMBAHKAN KODE INI DI BAWAH ===
+
+// Alias untuk menyambungkan UI lama ke fungsi baru
+export async function saveGuruDB(formData: FormData) {
+  const id = formData.get("id");
+  if (id) {
+    return updateGuru(formData);
+  } else {
+    return createGuru(formData);
+  }
+}
+
+export async function deleteGuruDB(id: string) {
+  return deleteGuru(id);
+}
+
+// Fungsi tambahan untuk mencegah error build dari UI
+export async function deleteGuruMassalDB(ids: string[]) {
+  try {
+    await prisma.user.deleteMany({ where: { id: { in: ids } } });
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch (error) {
+    return { success: false };
+  }
+}
+
+export async function updateAksesGuruDB(id: string, status: string) {
+  try {
+    await prisma.teacherProfile.updateMany({
+      where: { userId: id },
+      data: { status }
+    });
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch (error) {
+    return { success: false };
+  }
+}
+
+export async function importGuruMassalDB(data: any[]) {
+  // Placeholder agar tidak error saat diimpor oleh komponen import
+  return { success: false, message: "Fitur import sedang disesuaikan" };
+}
