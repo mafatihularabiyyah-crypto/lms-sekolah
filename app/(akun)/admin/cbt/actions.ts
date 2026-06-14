@@ -160,7 +160,7 @@ export async function getClassesForCbtDB() {
       select: { name: true }, 
       orderBy: { name: 'asc' }
     });
-    return { success: true, data: classes.map(c => c.name) };
+    return { success: true, data: classes.map((c: any) => c.name) };
   } catch (error) {
     return { success: false, data: [] };
   }
