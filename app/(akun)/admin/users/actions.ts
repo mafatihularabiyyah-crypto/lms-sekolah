@@ -154,12 +154,28 @@ export async function deleteGuru(id: string) {
   revalidatePath("/admin/users");
 }
 
-// === TAMBAHKAN KODE INI DI BAWAH ===
+// === FUNGSI JEMBATAN UNTUK UI LAMA ===
 
-// Alias untuk menyambungkan UI lama ke fungsi baru
-export async function saveGuruDB(formData: FormData) {
-  const id = formData.get("id");
-  if (id) {
+export async function saveGuruDB(data: any, id?: string) {
+  let formData = data;
+
+  // Jika data yang dikirim dari UI adalah object biasa (JSON), ubah menjadi FormData
+  if (!(data instanceof FormData)) {
+    formData = new FormData();
+    for (const key in data) {
+      if (data[key] !== null && data[key] !== undefined) {
+        formData.append(key, data[key] as string);
+      }
+    }
+  }
+
+  // Jika parameter ke-2 (id) dikirimkan, masukkan ke dalam FormData
+  if (id && !formData.get("id")) {
+    formData.append("id", id);
+  }
+
+  // Cek apakah ini proses Edit (Update) atau Tambah Baru (Create)
+  if (formData.get("id")) {
     return updateGuru(formData);
   } else {
     return createGuru(formData);
@@ -181,7 +197,6 @@ export async function deleteGuruMassalDB(ids: string[]) {
   }
 }
 
-// Ganti fungsi updateAksesGuruDB yang sebelumnya dengan ini:
 export async function updateAksesGuruDB(id: string, arg2: string, arg3?: string) {
   try {
     // Jika argumen ke-3 (password) dikirimkan dari UI, berarti ini update kredensial
