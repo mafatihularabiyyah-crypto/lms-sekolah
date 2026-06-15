@@ -137,7 +137,7 @@ export default async function DashboardSantri() {
             {materiTerbaru.length === 0 ? (
               <p className="text-sm text-slate-400 font-medium text-center py-8">Belum ada aktivitas baru.</p>
             ) : (
-              materiTerbaru.map((materi) => (
+              materiTerbaru.map((materi: any) => (
                 <div key={materi.id} className="group flex gap-5 p-4 -mx-4 rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer">
                   <div className="w-12 h-12 bg-slate-50 border border-slate-100 text-slate-400 rounded-2xl flex items-center justify-center shrink-0 group-hover:bg-white group-hover:text-indigo-600 group-hover:border-indigo-100 transition-all shadow-sm">
                     <FileText size={20} />
@@ -170,7 +170,7 @@ export default async function DashboardSantri() {
             {kelasku.length === 0 ? (
               <p className="text-sm text-slate-400 font-medium">Anda belum terdaftar di kelas manapun.</p>
             ) : (
-              kelasku.map((kelas) => (
+              kelasku.map((kelas: any) => (
                 <div key={kelas.id} className="flex items-center justify-between p-5 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-colors cursor-pointer group">
                   <div>
                     <h4 className="text-sm font-bold text-white mb-1">{kelas.name}</h4>
