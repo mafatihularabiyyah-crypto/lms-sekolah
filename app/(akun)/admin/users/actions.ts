@@ -181,15 +181,31 @@ export async function deleteGuruMassalDB(ids: string[]) {
   }
 }
 
-export async function updateAksesGuruDB(id: string, status: string) {
+// Ganti fungsi updateAksesGuruDB yang sebelumnya dengan ini:
+export async function updateAksesGuruDB(id: string, arg2: string, arg3?: string) {
   try {
-    await prisma.teacherProfile.updateMany({
-      where: { userId: id },
-      data: { status }
-    });
+    // Jika argumen ke-3 (password) dikirimkan dari UI, berarti ini update kredensial
+    if (arg3) {
+      const hashedPassword = await bcrypt.hash(arg3, 10);
+      await prisma.user.update({
+        where: { id },
+        data: { 
+          email: arg2, // arg2 di sini bertindak sebagai email
+          password: hashedPassword 
+        }
+      });
+    } else {
+      // Jika hanya 2 argumen, berarti ini update status (misal: "Aktif" / "Nonaktif")
+      await prisma.teacherProfile.updateMany({
+        where: { userId: id },
+        data: { status: arg2 } // arg2 di sini bertindak sebagai status
+      });
+    }
+    
     revalidatePath("/admin/users");
     return { success: true };
   } catch (error) {
+    console.error("Error update akses:", error);
     return { success: false };
   }
 }
