@@ -33,8 +33,8 @@ export default async function DashboardSantri() {
   const kelasku = profil?.classes || [];
 
   const totalKelas = kelasku.length;
-  const materiTerbaru = kelasku.flatMap(k => 
-    k.materials.map(m => ({ ...m, namaKelas: k.name }))
+  const materiTerbaru = kelasku.flatMap((k: any) => 
+    k.materials.map((m: any) => ({ ...m, namaKelas: k.name }))
   ).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 4);
 
   let totalNilai = 0;
