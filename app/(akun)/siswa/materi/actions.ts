@@ -33,7 +33,7 @@ export async function getMateriSantriDB() {
       }
     });
 
-    const enrolledClassIds = enrolledClasses.map(c => c.id);
+    const enrolledClassIds = enrolledClasses.map((c: any) => c.id);
 
     if (enrolledClassIds.length === 0) {
       return { success: true, data: [], enrolledClasses: [] };
