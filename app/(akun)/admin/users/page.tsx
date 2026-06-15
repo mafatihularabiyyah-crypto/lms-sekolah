@@ -32,7 +32,7 @@ export default function DirektoriGuruPage() {
   const loadData = async () => {
     setIsLoading(true);
     const res = await getGuruDB();
-    if (res.success && res.data) setTeachers(res.data as Guru[]);
+    if (res.success && res.data) setTeachers(res.data as unknown as Guru[]);
     setIsLoading(false);
   };
 
@@ -107,7 +107,7 @@ export default function DirektoriGuruPage() {
       setIsModalOpen(false);
       await loadData();
     } else {
-      alert(res?.error || "Terjadi kesalahan saat menyimpan data ke database.");
+      alert((res as any)?.error || "Terjadi kesalahan saat menyimpan data ke database.");
     }
   };
 
