@@ -258,7 +258,7 @@ export async function getStudentsForPlottingDB(classId: string) {
       where: {
         user: { tenantId: tenantId } // Hanya ambil santri dari sekolah ini
       },
-      include: { user: true, classRooms: { where: { id: classId } } }
+      include: { user: true, classes: { where: { id: classId } } }
     });
     
     const data = students.map((s: any) => ({
