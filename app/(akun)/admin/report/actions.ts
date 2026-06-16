@@ -49,7 +49,8 @@ export async function getClassesDB() {
   }
 }
 
-// 2. AMBIL DETAIL KELAS
+
+// 2. AMBIL DETAIL KELAS (DENGAN KALKULASI PROGRES VIDEO)
 export async function getClassDetailDB(classId: string) {
   try {
     const { tenantId } = await getAuthContext();
@@ -68,14 +69,32 @@ export async function getClassDetailDB(classId: string) {
       return { success: false, error: "Kelas tidak ditemukan atau akses ditolak." };
     }
 
+    // --- TAMBAHAN BARU: Hitung Progres Video Santri ---
+    const progressRecords = await prisma.materialProgress.groupBy({
+      by: ['userId'],
+      where: { classRoomId: classId },
+      _count: { materiId: true }
+    });
+
+    // Suntikkan jumlah video ke dalam masing-masing santri
+    const studentsWithProgress = classData.students.map((student: any) => {
+      const progress = progressRecords.find((p: any) => p.userId === student.userId);
+      return {
+        ...student,
+        watchedVideosCount: progress ? progress._count.materiId : 0
+      };
+    });
+
+    classData.students = studentsWithProgress; // Timpa data santri yang lama dengan yang baru
+
     return { success: true, data: classData };
   } catch (error) {
     return { success: false, error: "Gagal memuat detail kelas." };
   }
 }
 
-// 3. SIMPAN PRESENSI
-export async function saveAttendancesDB(classId: string, attendances: any[]) {
+// 3. SIMPAN PRESENSI (VERSI JSON DINAMIS)
+export async function saveAttendancesDB(classId: string, attendanceData: any, meetingCount: number) {
   try {
     const { tenantId } = await getAuthContext();
     
@@ -83,24 +102,30 @@ export async function saveAttendancesDB(classId: string, attendances: any[]) {
     const checkClass = await prisma.classRoom.findUnique({ where: { id: classId } });
     if (!checkClass || checkClass.tenantId !== tenantId) throw new Error("Akses ditolak");
 
-    await prisma.$transaction(
-      attendances.map(att => 
-        prisma.classAttendance.upsert({
-          where: { classRoomId_studentId: { classRoomId: classId, studentId: att.studentId } },
-          update: { hadir: att.hadir, sakit: att.sakit, izin: att.izin, alpa: att.alpa },
-          create: { classRoomId: classId, studentId: att.studentId, hadir: att.hadir, sakit: att.sakit, izin: att.izin, alpa: att.alpa }
-        })
-      )
-    );
+    // Ekstrak data JSON lama agar tidak tertimpa
+    const existingWeights = checkClass.weights 
+      ? (typeof checkClass.weights === 'string' ? JSON.parse(checkClass.weights) : checkClass.weights) 
+      : {};
+
+    await prisma.classRoom.update({
+      where: { id: classId },
+      data: {
+        weights: {
+          ...existingWeights,
+          attendanceRecord: attendanceData,
+          totalMeetings: meetingCount
+        }
+      }
+    });
     
     revalidatePath("/admin/report");
     return { success: true };
   } catch (error) {
+    console.error("Gagal simpan presensi:", error);
     return { success: false, error: "Gagal menyimpan presensi." };
   }
 }
 
-// 4. SIMPAN BUKU NILAI & BOBOT
 // 4. SIMPAN BUKU NILAI & BOBOT
 export async function saveGradebookDB(classId: string, grades: any[], weights: any) {
   try {
@@ -112,7 +137,7 @@ export async function saveGradebookDB(classId: string, grades: any[], weights: a
     await prisma.classRoom.update({
       where: { id: classId },
       data: { 
-        weights: JSON.stringify(weights),
+        weights: weights, // Tidak perlu di-stringify, Prisma meresolusi objek JSON secara otomatis
         kkm: weights.kkm 
       }
     });
@@ -130,7 +155,7 @@ export async function saveGradebookDB(classId: string, grades: any[], weights: a
             uts: g.uts, 
             uas: g.uas, 
             nilaiAkhir: g.nilaiAkhir,
-            certLink: g.certLink // <--- Link Sertifikat Update
+            certLink: g.certLink
           },
           create: { 
             classRoomId: classId, 
@@ -143,7 +168,7 @@ export async function saveGradebookDB(classId: string, grades: any[], weights: a
             uts: g.uts, 
             uas: g.uas, 
             nilaiAkhir: g.nilaiAkhir,
-            certLink: g.certLink // <--- Link Sertifikat Create
+            certLink: g.certLink 
           }
         })
       )

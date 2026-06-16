@@ -4,9 +4,11 @@ import { useState, useEffect, useMemo } from "react";
 import { 
   Users, BookOpen, Monitor, GraduationCap, 
   TrendingUp, Calendar, ArrowRight, Activity, 
-  Clock, ShieldCheck, Zap, MoreVertical, FileText, CheckCircle2, Loader2, Target, ChevronDown
+  Clock, ShieldCheck, Zap, FileText, CheckCircle2, 
+  Loader2, Target, ChevronDown, Server, Database, BarChart3,
+  RefreshCcw, LayoutDashboard
 } from "lucide-react";
-import { getDashboardDataDB } from "./actions"; // Pastikan path import sesuai
+import { getDashboardDataDB } from "./actions";
 
 export default function AdminDashboard() {
   const [greeting, setGreeting] = useState("Selamat Datang");
@@ -32,8 +34,14 @@ export default function AdminDashboard() {
       else if (hour < 15) setGreeting("Selamat Siang");
       else if (hour < 18) setGreeting("Selamat Sore");
       else setGreeting("Selamat Malam");
-      setCurrentTime(now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }));
+      
+      const options: Intl.DateTimeFormatOptions = { 
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', 
+        hour: '2-digit', minute: '2-digit' 
+      };
+      setCurrentTime(now.toLocaleDateString('id-ID', options));
     };
+    
     updateTime();
     const timer = setInterval(updateTime, 60000);
 
@@ -48,15 +56,15 @@ export default function AdminDashboard() {
     const res = await getDashboardDataDB();
     if (res.success && res.data) {
       setStats({
-        santri: res.data.totalSantri,
-        guru: res.data.totalGuru,
-        kelas: res.data.totalKelas,
-        cbt: res.data.cbtLive
+        santri: res.data.totalSantri || 0,
+        guru: res.data.totalGuru || 0,
+        kelas: res.data.totalKelas || 0,
+        cbt: res.data.cbtLive || 0
       });
-      setKelasOptions(res.data.daftarKelas);
-      setSemuaNilai(res.data.semuaNilai);
-      setUjianLive(res.data.ujianLive);
-      setLogAktivitas(res.data.aktivitasTerbaru);
+      setKelasOptions(res.data.daftarKelas || []);
+      setSemuaNilai(res.data.semuaNilai || []);
+      setUjianLive(res.data.ujianLive || []);
+      setLogAktivitas(res.data.aktivitasTerbaru || []);
     }
     setIsLoading(false);
   };
@@ -92,56 +100,76 @@ export default function AdminDashboard() {
   }, [semuaNilai, filterKelas]);
 
   if (isLoading) {
-    return <div className="min-h-screen bg-[#F4F7FB] flex items-center justify-center"><Loader2 className="w-10 h-10 text-indigo-600 animate-spin" /></div>;
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center gap-4">
+        <div className="relative">
+          <div className="absolute inset-0 bg-indigo-500 blur-xl opacity-20 rounded-full"></div>
+          <Loader2 className="w-12 h-12 text-indigo-600 animate-spin relative z-10" />
+        </div>
+        <p className="text-sm font-bold text-slate-500 tracking-widest uppercase animate-pulse">Menyiapkan Workspace...</p>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F7FB] p-4 md:p-8 font-sans pb-20">
+    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-6 lg:p-8 font-sans pb-24 selection:bg-indigo-100">
       <div className="max-w-[1600px] mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
         
-        {/* HEADER SECTION */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-8 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 relative overflow-hidden">
-          <div className="absolute right-0 top-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl -z-10 translate-x-1/2 -translate-y-1/2 opacity-50"></div>
+        {/* ================= HEADER SECTION ================= */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white p-6 md:p-8 rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 relative overflow-hidden">
+          <div className="absolute right-0 top-0 w-[500px] h-[500px] bg-gradient-to-bl from-indigo-50 via-transparent to-transparent rounded-full -z-10 translate-x-1/3 -translate-y-1/3 opacity-70"></div>
           
-          <div className="z-10">
-            <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-              {greeting}, Admin! <span className="animate-wave text-4xl origin-bottom-right">👋</span>
-            </h1>
-            <p className="text-slate-500 font-medium mt-1 flex items-center gap-2">
-              <Calendar size={16} className="text-indigo-500" /> {currentTime}
-            </p>
+          <div className="z-10 flex items-center gap-5">
+            <div className="w-14 h-14 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200 shrink-0">
+              <LayoutDashboard size={28} strokeWidth={2} />
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+                {greeting}, Administrator.
+              </h1>
+              <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                <p className="text-slate-500 font-medium text-sm flex items-center gap-1.5">
+                  <Calendar size={14} className="text-indigo-500" /> {currentTime}
+                </p>
+                <span className="hidden md:inline-block w-1 h-1 bg-slate-300 rounded-full"></span>
+                <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">
+                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                  System Online
+                </span>
+              </div>
+            </div>
           </div>
           
           <div className="flex gap-3 z-10 w-full md:w-auto">
-            <button onClick={loadData} className="flex-1 md:flex-none px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition shadow-sm flex items-center justify-center gap-2">
-              <ShieldCheck size={18} className="text-emerald-500"/> Segarkan Data
+            <button onClick={loadData} className="flex-1 md:flex-none px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-50 hover:text-indigo-600 transition-all shadow-sm flex items-center justify-center gap-2">
+              <RefreshCcw size={16}/> Segarkan
             </button>
-            <button className="flex-1 md:flex-none px-6 py-3 bg-indigo-600 text-white rounded-xl font-black hover:bg-indigo-700 transition shadow-[0_8px_20px_rgba(79,70,229,0.25)] flex items-center justify-center gap-2 active:scale-95">
-              <Zap size={18}/> Aksi Cepat
+            <button className="flex-1 md:flex-none px-5 py-2.5 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-black transition-all shadow-lg shadow-slate-900/20 flex items-center justify-center gap-2 active:scale-95">
+              <Zap size={16}/> Tindakan Cepat
             </button>
           </div>
         </div>
 
-        {/* TOP STATS CARDS */}
+        {/* ================= TOP STATS CARDS ================= */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
           {[
-            { label: "Total Santri Aktif", value: stats.santri, icon: Users, color: "text-blue-600", bg: "bg-blue-50", trend: "Database Terkini" },
-            { label: "Pengajar Aktif", value: stats.guru, icon: GraduationCap, color: "text-emerald-600", bg: "bg-emerald-50", trend: "Database Terkini" },
-            { label: "Kelas Berjalan", value: stats.kelas, icon: BookOpen, color: "text-amber-600", bg: "bg-amber-50", trend: "Belum Selesai" },
-            { label: "Ujian CBT Live", value: stats.cbt, icon: Monitor, color: "text-indigo-600", bg: "bg-indigo-50", trend: "Bisa Diakses Siswa", pulsing: stats.cbt > 0 },
+            { label: "Total Santri Aktif", value: stats.santri, icon: Users, color: "text-blue-600", bg: "bg-blue-50/50", border: "border-blue-100", trend: "+2.4% Bulan ini" },
+            { label: "Pengajar Aktif", value: stats.guru, icon: GraduationCap, color: "text-emerald-600", bg: "bg-emerald-50/50", border: "border-emerald-100", trend: "Database Valid" },
+            { label: "Kelas Berjalan", value: stats.kelas, icon: BookOpen, color: "text-amber-600", bg: "bg-amber-50/50", border: "border-amber-100", trend: "Periode Aktif" },
+            { label: "Ujian CBT Live", value: stats.cbt, icon: Monitor, color: "text-indigo-600", bg: "bg-indigo-50/50", border: "border-indigo-100", trend: "Sedang Terkoneksi", pulsing: stats.cbt > 0 },
           ].map((stat, idx) => (
-            <div key={idx} className="bg-white p-6 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-slate-100 flex flex-col justify-between group hover:-translate-y-1 transition-all duration-300">
-              <div className="flex justify-between items-start mb-4">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${stat.bg} ${stat.color} transition-transform group-hover:scale-110`}>
-                  <stat.icon size={28} strokeWidth={2.5} />
+            <div key={idx} className="bg-white p-6 rounded-[1.5rem] shadow-[0_2px_15px_rgb(0,0,0,0.02)] border border-slate-100 flex flex-col justify-between group hover:border-slate-300 hover:shadow-[0_10px_30px_rgb(0,0,0,0.06)] transition-all duration-300">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{stat.label}</p>
+                  <p className="text-3xl font-black text-slate-800 tracking-tight">{stat.value}</p>
                 </div>
-                {stat.pulsing && <span className="relative flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span></span>}
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${stat.bg} ${stat.color} border ${stat.border}`}>
+                  <stat.icon size={22} strokeWidth={2} />
+                  {stat.pulsing && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500 border-2 border-white"></span></span>}
+                </div>
               </div>
-              <div>
-                <p className="text-4xl font-black text-slate-800 tracking-tight tabular-nums">{stat.value}</p>
-                <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mt-1">{stat.label}</p>
-              </div>
-              <div className="mt-4 pt-4 border-t border-slate-50 flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <TrendingUp size={14} className={stat.color} />
                 <span className="text-xs font-bold text-slate-500">{stat.trend}</span>
               </div>
@@ -149,26 +177,28 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* BENTO GRID MAIN SECTION */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* ================= BENTO GRID MAIN SECTION ================= */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           
-          {/* KOLOM 1: Grafik Akademik (Lebar 2 Kolom) */}
-          <div className="lg:col-span-2 space-y-6">
+          {/* KOLOM KIRI: Grafik Akademik & Quick Actions (Lebar 2 Kolom) */}
+          <div className="xl:col-span-2 space-y-6">
             
             {/* Custom CSS Bar Chart - Indeks Nilai */}
-            <div className="bg-white p-8 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-slate-100 min-h-[400px] flex flex-col">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 min-h-[420px] flex flex-col relative overflow-hidden">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4 relative z-10">
                 <div>
-                  <h3 className="text-lg font-black text-slate-800">Rata-Rata Komponen Nilai</h3>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Ditarik dari Sistem Raport</p>
+                  <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                    <BarChart3 className="text-indigo-600" size={20}/> Rata-Rata Akademik
+                  </h3>
+                  <p className="text-sm font-medium text-slate-500 mt-1">Akumulasi nilai berdasarkan laporan Gradebook</p>
                 </div>
                 
                 {/* FILTER KELAS */}
-                <div className="relative">
+                <div className="relative w-full md:w-64">
                   <select 
                     value={filterKelas} 
                     onChange={(e) => setFilterKelas(e.target.value)}
-                    className="appearance-none bg-slate-50 border border-slate-200 text-slate-700 font-bold text-sm py-2.5 pl-4 pr-10 rounded-xl outline-none focus:ring-2 focus:ring-indigo-100 cursor-pointer shadow-sm"
+                    className="w-full appearance-none bg-white border border-slate-200 text-slate-700 font-bold text-sm py-2.5 pl-4 pr-10 rounded-xl outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 transition-all cursor-pointer shadow-sm"
                   >
                     <option value="all">Semua Kelas Gabungan</option>
                     {kelasOptions.map(k => (
@@ -179,17 +209,25 @@ export default function AdminDashboard() {
                 </div>
               </div>
               
-              {/* Grafik Batang Murni Tailwind */}
-              <div className="flex-1 flex items-end justify-between gap-3 md:gap-6 pt-6 mt-auto">
+              {/* Grafik Batang CSS dengan Background Grid */}
+              <div className="flex-1 relative flex items-end justify-between gap-2 md:gap-6 mt-auto z-10">
+                {/* Background Grid Lines */}
+                <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20">
+                  <div className="w-full h-[1px] bg-slate-400"></div>
+                  <div className="w-full h-[1px] bg-slate-400"></div>
+                  <div className="w-full h-[1px] bg-slate-400"></div>
+                  <div className="w-full h-[1px] bg-slate-400"></div>
+                  <div className="w-full h-[1px] bg-slate-400"></div>
+                </div>
+
                 {chartData.map((item, i) => (
-                  <div key={i} className="flex flex-col items-center gap-3 w-full group">
-                    {/* Tulisan Angka di atas Bar */}
-                    <span className={`text-xs md:text-sm font-black transition-all ${item.active ? 'text-indigo-600' : 'text-slate-500 group-hover:text-slate-800'}`}>
+                  <div key={i} className="flex flex-col items-center gap-3 w-full group relative z-10 h-full justify-end">
+                    <span className={`text-xs md:text-sm font-black transition-all ${item.active ? 'text-indigo-700 bg-indigo-50 px-2 py-1 rounded-md' : 'text-slate-500 group-hover:text-slate-800'}`}>
                       {item.val}
                     </span>
-                    <div className="w-full relative flex justify-center items-end h-56 bg-slate-50 rounded-t-xl overflow-hidden border-x border-t border-slate-100">
+                    <div className="w-full max-w-[60px] relative flex justify-center items-end h-[200px] md:h-[240px] bg-slate-50 rounded-t-xl overflow-hidden border-x border-t border-slate-100">
                       <div 
-                        className={`w-full rounded-t-xl transition-all duration-1000 ease-out group-hover:opacity-90 ${item.active ? 'bg-gradient-to-t from-indigo-600 to-blue-500 shadow-[0_0_20px_rgba(99,102,241,0.3)]' : 'bg-slate-300'}`} 
+                        className={`w-full rounded-t-xl transition-all duration-1000 ease-out group-hover:opacity-90 ${item.active ? 'bg-gradient-to-t from-indigo-700 to-indigo-400 shadow-[0_0_20px_rgba(79,70,229,0.3)]' : 'bg-slate-300'}`} 
                         style={{ height: `${item.val}%` }}
                       ></div>
                     </div>
@@ -199,79 +237,86 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Quick Actions (Pintasan Cepat) */}
+            {/* Quick Actions (Pintasan Cepat Modular) */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                {[
-                 { title: 'Manajemen CBT', icon: Monitor, color: 'bg-blue-600 text-white shadow-blue-200', link: '/admin/cbt' },
-                 { title: 'Cetak Rapor', icon: FileText, color: 'bg-emerald-500 text-white shadow-emerald-200', link: '/admin/rapor' },
-                 { title: 'Input Kelas', icon: BookOpen, color: 'bg-amber-500 text-white shadow-amber-200', link: '/admin/kelas' },
-                 { title: 'Data Santri', icon: Users, color: 'bg-white text-slate-700 border-2 border-slate-200 hover:border-indigo-500 hover:text-indigo-600', link: '/admin/siswa' },
+                 { title: 'Manajemen CBT', desc: 'Kelola Soal & Ujian', icon: Monitor, border: 'border-blue-100 hover:border-blue-500', text: 'text-blue-700', bg: 'bg-blue-50/50', link: '/admin/cbt' },
+                 { title: 'Cetak Rapor', desc: 'Generate & Export', icon: FileText, border: 'border-emerald-100 hover:border-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-50/50', link: '/admin/rapor' },
+                 { title: 'Data Kelas', desc: 'Atur Halaqah/Kelas', icon: BookOpen, border: 'border-amber-100 hover:border-amber-500', text: 'text-amber-700', bg: 'bg-amber-50/50', link: '/admin/kelas' },
+                 { title: 'Data Santri', desc: 'Database Peserta', icon: Users, border: 'border-slate-200 hover:border-slate-800', text: 'text-slate-700', bg: 'bg-white', link: '/admin/siswa' },
                ].map((action, i) => (
-                 <button key={i} onClick={() => window.location.href = action.link} className={`p-5 rounded-3xl flex flex-col items-center justify-center gap-3 font-bold text-xs text-center transition-all hover:-translate-y-1 shadow-lg ${action.color}`}>
-                   <action.icon size={24} />
-                   {action.title}
+                 <button key={i} onClick={() => window.location.href = action.link} className={`p-5 rounded-2xl flex flex-col items-start justify-center gap-1 border transition-all duration-300 hover:shadow-lg hover:-translate-y-1 text-left ${action.border} ${action.bg}`}>
+                   <action.icon size={24} className={`mb-2 ${action.text}`} strokeWidth={1.5} />
+                   <h4 className={`font-black text-sm ${action.text}`}>{action.title}</h4>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{action.desc}</p>
                  </button>
                ))}
             </div>
 
           </div>
 
-          {/* KOLOM 2: Panel Samping (Lebar 1 Kolom) */}
+          {/* KOLOM KANAN: Panel Samping (Lebar 1 Kolom) */}
           <div className="space-y-6">
             
-            {/* Monitor Live Ujian CBT */}
-            <div className="bg-gradient-to-br from-slate-900 to-indigo-950 p-8 rounded-[2rem] shadow-xl text-white relative overflow-hidden flex flex-col h-[400px]">
-               <div className="absolute top-0 right-0 p-32 bg-white/5 blur-[100px] rounded-full pointer-events-none"></div>
+            {/* Monitor Live Ujian CBT - Dark High-Tech UI */}
+            <div className="bg-slate-900 p-6 md:p-8 rounded-[2rem] shadow-xl text-white relative overflow-hidden flex flex-col h-[420px] border border-slate-800">
+               <div className="absolute top-0 right-0 p-32 bg-indigo-500/10 blur-[100px] rounded-full pointer-events-none"></div>
+               <div className="absolute bottom-0 left-0 p-32 bg-emerald-500/10 blur-[100px] rounded-full pointer-events-none"></div>
                
-               <div className="flex items-center gap-3 mb-6 relative z-10 shrink-0">
-                 <div className="w-10 h-10 bg-emerald-500/20 text-emerald-400 rounded-xl flex items-center justify-center border border-emerald-500/30">
-                   <Target className="animate-pulse" size={20}/>
-                 </div>
-                 <div>
-                   <h3 className="font-black text-sm uppercase tracking-widest text-indigo-200">Status Engine</h3>
-                   <p className="text-white font-bold">Ujian Live Berlangsung</p>
+               <div className="flex justify-between items-center mb-6 relative z-10 shrink-0">
+                 <div className="flex items-center gap-3">
+                   <div className="w-10 h-10 bg-slate-800/80 text-emerald-400 rounded-xl flex items-center justify-center border border-slate-700 backdrop-blur-sm">
+                     <Target className="animate-pulse" size={20}/>
+                   </div>
+                   <div>
+                     <h3 className="font-black text-[10px] uppercase tracking-widest text-slate-400">Engine Status</h3>
+                     <p className="text-white font-bold text-sm">CBT Live Monitor</p>
+                   </div>
                  </div>
                </div>
 
                <div className="space-y-3 relative z-10 flex-1 overflow-y-auto custom-scrollbar pr-2">
                  {ujianLive.length === 0 ? (
-                   <div className="text-center text-slate-400 text-sm mt-10 italic">Tidak ada sesi ujian aktif.</div>
+                   <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
+                     <Server size={32} className="mb-3 text-slate-500" strokeWidth={1.5}/>
+                     <p className="text-slate-400 text-sm font-medium">Server Standby.<br/>Tidak ada sesi ujian aktif.</p>
+                   </div>
                  ) : ujianLive.map((cbt, i) => (
-                   <div key={i} className="bg-white/10 border border-white/20 p-4 rounded-2xl hover:bg-white/20 transition cursor-pointer">
+                   <div key={i} className="bg-slate-800/50 border border-slate-700/50 p-4 rounded-2xl hover:bg-slate-800 transition cursor-pointer backdrop-blur-md">
                      <div className="flex justify-between items-start mb-2">
                        <h4 className="font-bold text-sm text-white line-clamp-1 flex-1 pr-2">{cbt.judul}</h4>
-                       <span className="text-[9px] font-black bg-emerald-500 text-white px-2 py-0.5 rounded uppercase tracking-widest shrink-0">LIVE</span>
+                       <span className="text-[9px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded uppercase tracking-widest shrink-0">LIVE</span>
                      </div>
-                     <div className="flex justify-between items-center text-[11px] text-indigo-200 font-medium">
-                       <span className="flex items-center gap-1.5"><Clock size={12}/> {cbt.durasi} Menit</span>
-                       <span className="flex items-center gap-1.5"><Users size={12}/> {cbt._count.results} Selesai</span>
+                     <div className="flex justify-between items-center text-[11px] text-slate-400 font-medium mt-3">
+                       <span className="flex items-center gap-1.5"><Clock size={12}/> {cbt.durasi} Min</span>
+                       <span className="flex items-center gap-1.5"><Activity size={12}/> {cbt._count.results} Submitted</span>
                      </div>
                    </div>
                  ))}
                </div>
 
-               <button onClick={() => window.location.href = '/admin/cbt'} className="w-full mt-4 py-3.5 bg-white/10 hover:bg-white/20 border border-white/30 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 shrink-0">
-                 Buka Panel Ujian <ArrowRight size={16}/>
+               <button onClick={() => window.location.href = '/admin/cbt'} className="w-full mt-4 py-3.5 bg-indigo-600 hover:bg-indigo-500 border border-indigo-500 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 shrink-0 shadow-lg shadow-indigo-900/50">
+                 Akses Ruang Kontrol <ArrowRight size={16}/>
                </button>
             </div>
 
             {/* Aktivitas Terbaru Sistem */}
-            <div className="bg-white p-8 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-slate-100">
-               <h3 className="text-lg font-black text-slate-800 mb-6 flex items-center gap-2">
-                 <Clock className="text-indigo-500" size={20}/> Aktivitas Ujian
+            <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-[0_2px_20px_rgb(0,0,0,0.02)] border border-slate-100 flex-1">
+               <h3 className="text-base font-black text-slate-800 mb-6 flex items-center gap-2">
+                 <Database className="text-slate-400" size={18}/> Log Aktivitas
                </h3>
                
                <div className="relative border-l-2 border-slate-100 ml-3 space-y-6">
                  {logAktivitas.length === 0 ? (
-                    <p className="text-sm text-slate-400 italic pl-4">Belum ada riwayat pengerjaan.</p>
+                    <p className="text-sm text-slate-400 font-medium pl-4">Log sistem kosong.</p>
                  ) : logAktivitas.map((log, i) => (
-                   <div key={i} className="pl-6 relative">
-                     <span className="absolute -left-[17px] top-0 w-8 h-8 rounded-full flex items-center justify-center border-2 border-white shadow-sm text-emerald-600 bg-emerald-50">
+                   <div key={i} className="pl-6 relative group">
+                     <span className="absolute -left-[17px] top-0 w-8 h-8 rounded-full flex items-center justify-center border-4 border-white shadow-sm text-emerald-600 bg-emerald-50 group-hover:bg-emerald-100 transition-colors">
                        <CheckCircle2 size={14}/>
                      </span>
-                     <h4 className="text-sm font-black text-slate-800 leading-none mb-1 line-clamp-1">{log.namaPeserta} Selesai Ujian</h4>
-                     <p className="text-[11px] text-slate-500 font-bold mb-1.5 line-clamp-1">{log.exam?.judul} - Nilai: {log.nilai}</p>
-                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{new Date(log.createdAt).toLocaleString('id-ID')}</span>
+                     <h4 className="text-sm font-black text-slate-800 leading-tight mb-1 line-clamp-1">{log.namaPeserta}</h4>
+                     <p className="text-xs text-slate-500 font-medium mb-1.5 line-clamp-1">Submit "{log.exam?.judul}" (Nilai: <span className="font-bold text-indigo-600">{log.nilai}</span>)</p>
+                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{new Date(log.createdAt).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}</span>
                    </div>
                  ))}
                </div>
@@ -281,23 +326,6 @@ export default function AdminDashboard() {
 
         </div>
       </div>
-
-      <style dangerouslySetInnerHTML={{__html: `
-        @keyframes wave {
-          0% { transform: rotate(0deg); }
-          10% { transform: rotate(14deg); }
-          20% { transform: rotate(-8deg); }
-          30% { transform: rotate(14deg); }
-          40% { transform: rotate(-4deg); }
-          50% { transform: rotate(10deg); }
-          60%, 100% { transform: rotate(0deg); }
-        }
-        .animate-wave {
-          display: inline-block;
-          animation: wave 2.5s infinite;
-          transform-origin: 70% 70%;
-        }
-      `}}/>
     </div>
   );
 }

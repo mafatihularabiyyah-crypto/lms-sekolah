@@ -5,8 +5,10 @@ import {
   Search, Filter, Plus, Edit3, Trash2, UploadCloud, 
   ChevronLeft, ChevronRight, CheckCircle2, XCircle, 
   Database, Loader2, KeySquare, FileSpreadsheet, X, Save,
-  MessageCircle, Briefcase, GraduationCap
+  MessageCircle, Briefcase, GraduationCap,
+  Download
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { getSiswaDB, deleteSiswaDB, deleteSiswaMassalDB, saveSiswaDB, updateAksesSiswaDB, importSiswaMassalDB, luluskanSiswaMassalDB } from './actions';
 
 interface Siswa {
@@ -123,6 +125,34 @@ export default function ManajemenSiswaPage() {
     const blob = new Blob([headers + example], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `Template_Import_Siswa.csv`; link.click();
   };
+
+  const handleExportExcel = () => {
+  if (students.length === 0) {
+    return alert("Tidak ada data siswa untuk diekspor.");
+  }
+
+  // 1. Format data agar rapi saat masuk Excel
+  const dataToExport = students.map((s, index) => ({
+    "No": index + 1,
+    "NIS": s.nis,
+    "Nama Lengkap": s.nama,
+    "Email": s.email || "-",
+    "Jenis Kelamin": s.jk === "L" ? "Laki-laki" : "Perempuan",
+    "Kelas/Angkatan": s.kelas,
+    "Status": s.status,
+    "Nama Wali": s.ortu || "-",
+    "No. HP Wali": s.telepon || "-",
+    "Alamat": s.alamat || "-"
+  }));
+
+  // 2. Buat Sheet dan Workbook
+  const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Data Santri");
+
+  // 3. Simpan file
+  XLSX.writeFile(workbook, `Data_Santri_LMS_${new Date().getTime()}.xlsx`);
+};
 
   const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -269,6 +299,12 @@ export default function ManajemenSiswaPage() {
             <button onClick={handleDownloadTemplate} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl font-bold hover:bg-slate-50 transition-all text-sm shadow-sm cursor-pointer">
               <FileSpreadsheet className="w-4 h-4" /> Unduh Template
             </button>
+            <button 
+  onClick={handleExportExcel}
+  className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition shadow-sm cursor-pointer"
+>
+  <Download size={16}/> Ekspor Excel
+</button>
             <input type="file" accept=".csv" ref={fileInputRef} onChange={handleImportCSV} className="hidden" />
             <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-white border border-indigo-200 text-indigo-700 px-4 py-2.5 rounded-xl font-bold hover:bg-indigo-50 transition-all text-sm shadow-sm cursor-pointer">
               <UploadCloud className="w-4 h-4" /> Import CSV

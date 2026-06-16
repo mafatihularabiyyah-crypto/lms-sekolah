@@ -36,7 +36,7 @@ export async function getMateriSantriDB() {
     const enrolledClassIds = enrolledClasses.map((c: any) => c.id);
 
     if (enrolledClassIds.length === 0) {
-      return { success: true, data: [], enrolledClasses: [] };
+      return { success: true, data: [], enrolledClasses: [], completedMaterials: [] };
     }
 
     const rawMateri = await prisma.learningMaterial.findMany({
@@ -51,11 +51,10 @@ export async function getMateriSantriDB() {
 
     const formattedMateri = rawMateri.map((m: any) => {
       let tipeFile = "PDF";
-      let finalUrl = m.fileUrl || "#";
 
+      // Tentukan tipe icon utama
       if (m.youtubeLink && m.youtubeLink.length > 5) {
         tipeFile = "VIDEO";
-        finalUrl = m.youtubeLink;
       } else if (m.fileUrl && (m.fileUrl.includes("drive.google") || m.fileUrl.startsWith("http"))) {
         tipeFile = "LINK";
       }
@@ -65,17 +64,30 @@ export async function getMateriSantriDB() {
         judul: m.title, 
         deskripsi: m.description,
         tipe: tipeFile, 
-        fileUrl: finalUrl,
+        
+        // PERBAIKAN DI SINI: Kirim kedua link secara terpisah, jangan digabung
+        fileUrl: m.fileUrl || null, 
+        youtubeLink: m.youtubeLink || null, 
+        
         classRoomId: m.classRoomId,
         classRoom: m.classRoom,
         createdAt: m.createdAt || new Date().toISOString() 
       };
     });
 
+    // --- TAMBAHAN BARU: AMBIL PROGRESS MATERI DARI DATABASE ---
+    const progressDB = await prisma.materialProgress.findMany({
+      where: { userId: user.id },
+      select: { materiId: true }
+    });
+    // Ekstrak hanya ID materi menjadi sebuah array agar mudah dibaca oleh UI
+    const completedMaterials = progressDB.map((p: any) => p.materiId);
+
     return { 
       success: true, 
       data: formattedMateri,
-      enrolledClasses: enrolledClasses 
+      enrolledClasses: enrolledClasses,
+      completedMaterials: completedMaterials // <--- Dikirimkan ke UI
     };
 
   } catch (error: any) {
@@ -101,6 +113,46 @@ export async function markAttendanceSantriDB(classRoomId: string) {
 
   } catch (error) {
     console.error("Gagal update presensi:", error);
+    return { success: false };
+  }
+}
+
+// ====================================================================
+// 3. FUNGSI MENYIMPAN PROGRESS MATERI KE DATABASE (BARU)
+// ====================================================================
+export async function markMaterialCompletedDB(materiId: string, classRoomId: string) {
+  try {
+    const session = await getServerSession();
+    if (!session?.user?.email) return { success: false };
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) return { success: false };
+
+    // 1. Cek apakah progress ini sudah ada agar tidak terjadi data ganda (duplikat)
+    const existingProgress = await prisma.materialProgress.findFirst({
+      where: {
+        userId: user.id,
+        materiId: materiId,
+      }
+    });
+
+    // 2. Jika belum ada, buat data baru
+    if (!existingProgress) {
+      await prisma.materialProgress.create({
+        data: {
+          userId: user.id,
+          materiId: materiId,
+          classRoomId: classRoomId,
+        }
+      });
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Gagal menyimpan progress materi:", error);
     return { success: false };
   }
 }

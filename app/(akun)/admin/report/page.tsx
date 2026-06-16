@@ -5,7 +5,8 @@ import * as XLSX from 'xlsx';
 import { 
   Search, FolderOpen, ChevronLeft, CheckCircle2, 
   Award, Download, Save, Calculator, BookOpen, MessageCircle,
-  Monitor, RefreshCw, AlertTriangle, Loader2, Send, Link as LinkIcon, ExternalLink
+  Monitor, RefreshCw, AlertTriangle, Loader2, Send, Link as LinkIcon, ExternalLink,
+  MonitorPlay, Settings
 } from 'lucide-react';
 import { 
   getClassesDB, getClassDetailDB, saveAttendancesDB, 
@@ -25,7 +26,11 @@ export default function ManajemenKelasAllInOne() {
   const [searchClass, setSearchClass] = useState("");
   const [searchSantri, setSearchSantri] = useState("");
   
+  // STATE UNTUK TAB PRESENSI DINAMIS
   const [attendances, setAttendances] = useState<any>({}); 
+  const [meetingCount, setMeetingCount] = useState<number>(16);
+
+  // STATE UNTUK TAB GRADEBOOK
   const [jumlahTugas, setJumlahTugas] = useState(1);
   const [bobot, setBobot] = useState({ tugas: 20, uts: 30, uas: 50 });
   const [kkm, setKkm] = useState(75); 
@@ -53,19 +58,19 @@ export default function ManajemenKelasAllInOne() {
       setActiveClass(res.data);
       setStudents(res.data.students || []);
       
-      const attMap: any = {};
-      (res.data.attendances || []).forEach((a: any) => {
-        attMap[a.studentId] = { hadir: a.hadir, sakit: a.sakit, izin: a.izin, alpa: a.alpa };
-      });
-      setAttendances(attMap);
-
       if (res.data.weights) {
         const w = typeof res.data.weights === 'string' ? JSON.parse(res.data.weights) : res.data.weights;
         setBobot({ tugas: w.tugas || 20, uts: w.uts || 30, uas: w.uas || 50 });
         setJumlahTugas(w.jmlTugas || 1);
         setKkm(w.kkm || res.data.kkm || 75); 
+        
+        // Load settingan jumlah pertemuan & data presensi dari weights JSON
+        setMeetingCount(w.totalMeetings || 16);
+        setAttendances(w.attendanceRecord || {});
       } else {
         setKkm(res.data.kkm || 75);
+        setMeetingCount(16);
+        setAttendances({});
       }
       
       const gradeMap: any = {};
@@ -73,7 +78,7 @@ export default function ManajemenKelasAllInOne() {
         gradeMap[g.studentId] = { 
           tugas1: g.tugas1, tugas2: g.tugas2, tugas3: g.tugas3, tugas4: g.tugas4, tugas5: g.tugas5, 
           uts: g.uts, uas: g.uas, nilaiAkhir: g.nilaiAkhir,
-          certLink: g.certLink || "" // Menyiapkan wadah untuk Link Sertifikat
+          certLink: g.certLink || ""
         };
       });
       setGrades(gradeMap);
@@ -102,16 +107,21 @@ export default function ManajemenKelasAllInOne() {
     });
   }, [students, searchSantri]);
 
-  const handleAttChange = (studentId: string, field: 'hadir'|'sakit'|'izin'|'alpa', val: string) => {
-    setAttendances((prev:any) => ({ ...prev, [studentId]: { ...(prev[studentId] || {hadir:0,sakit:0,izin:0,alpa:0}), [field]: Number(val) } }));
+  // Fungsi mengubah presensi di local state
+  const handleAttChange = (studentId: string, pertemuanKe: number, value: string) => {
+    setAttendances((prev: any) => ({
+      ...prev,
+      [`${studentId}_${pertemuanKe}`]: value
+    }));
   };
 
+  // Menyimpan tabel presensi ke JSON
   const saveAttendances = async () => {
     setIsLoading(true);
-    const payload = Object.keys(attendances).map(sId => ({ studentId: sId, ...attendances[sId] }));
-    const res = await saveAttendancesDB(activeClass.id, payload);
+    const res = await saveAttendancesDB(activeClass.id, attendances, meetingCount);
     setIsLoading(false);
     if (res.success) alert("Data presensi berhasil disimpan!");
+    else alert("Gagal menyimpan presensi.");
   };
 
   const handleGradeChange = (studentId: string, field: string, val: string) => {
@@ -141,7 +151,7 @@ export default function ManajemenKelasAllInOne() {
     setIsLoading(true);
     
     const payloadGrades = Object.keys(grades).map(sId => ({ studentId: sId, ...grades[sId], nilaiAkhir: hitungNilaiAkhir(sId) }));
-    const payloadWeights = { ...bobot, jmlTugas: jumlahTugas, kkm: kkm, isPublished };
+    const payloadWeights = { ...bobot, jmlTugas: jumlahTugas, kkm: kkm, isPublished, totalMeetings: meetingCount, attendanceRecord: attendances };
 
     const res = await saveGradebookDB(activeClass.id, payloadGrades, payloadWeights);
     setIsLoading(false);
@@ -274,43 +284,138 @@ export default function ManajemenKelasAllInOne() {
           </div>
         </div>
 
-        {/* TAB PRESENSI */}
+        {/* ================= TAB PRESENSI DINAMIS ================= */}
         {activeTab === 'PRESENSI' && (
-          <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden">
+          <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden flex flex-col">
              <div className="p-4 border-b border-slate-100 bg-slate-50 flex flex-wrap gap-4 items-center justify-between">
               <div className="relative w-full sm:max-w-xs">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input type="text" value={searchSantri} onChange={e => setSearchSantri(e.target.value)} placeholder="Cari santri..." className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 font-bold text-slate-700" />
+                <input type="text" value={searchSantri} onChange={e => setSearchSantri(e.target.value)} placeholder="Cari santri..." className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 font-bold text-slate-700 shadow-sm" />
               </div>
-              <button onClick={saveAttendances} className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-md hover:bg-emerald-700 flex items-center gap-2 cursor-pointer"><Save size={16}/> Simpan Presensi</button>
+
+              <div className="flex gap-3 w-full md:w-auto">
+                <div className="flex items-center gap-2 bg-white shadow-sm border border-slate-200 px-3 py-2 rounded-xl">
+                  <Settings size={16} className="text-slate-400"/>
+                  <span className="text-xs font-bold text-slate-600">Jml Sesi:</span>
+                  <input 
+                    type="number" 
+                    min={1} 
+                    max={50} 
+                    value={meetingCount} 
+                    onChange={e => setMeetingCount(Number(e.target.value) || 1)}
+                    className="w-14 text-center text-sm font-bold bg-slate-50 border border-slate-200 rounded outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <button onClick={saveAttendances} className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-md hover:bg-emerald-700 flex items-center gap-2 cursor-pointer transition">
+                  <Save size={16}/> Simpan Data
+                </button>
+              </div>
             </div>
-            <div className="overflow-x-auto min-h-[300px]">
-              <table className="w-full text-left whitespace-nowrap">
-                <thead className="bg-white text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100 sticky top-0 shadow-sm z-10">
-                  <tr><th className="py-4 px-4 text-center w-12 border-r border-slate-50">No</th><th className="py-4 px-4 border-r border-slate-100">Nama Santri</th><th className="py-4 px-2 text-center text-emerald-600 bg-emerald-50/30">Hadir</th><th className="py-4 px-2 text-center text-amber-500 bg-amber-50/30">Sakit</th><th className="py-4 px-2 text-center text-blue-500 bg-blue-50/30">Izin</th><th className="py-4 px-2 text-center text-rose-500 bg-rose-50/30">Alpa</th><th className="py-4 px-6 text-center border-l border-slate-100">Total Sesi</th></tr>
+
+            <div className="overflow-x-auto min-h-[400px]">
+              <table className="w-full text-left whitespace-nowrap min-w-max border-collapse">
+                <thead className="bg-white text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-200 sticky top-0 shadow-sm z-10">
+                  <tr>
+                    {/* PERBAIKAN: Ditambahkan Kolom Nomor Urut */}
+                    <th className="py-4 px-4 text-center w-12 border-r border-slate-50">No</th>
+                    <th className="py-4 px-4 border-r border-slate-100 sticky left-0 bg-white shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20">Nama Santri</th>
+                    
+                    {Array.from({length: meetingCount}).map((_, i) => (
+                      <th key={i} className="py-4 px-2 text-center border-r border-slate-50 text-slate-500 w-16">
+                        P{i + 1}
+                      </th>
+                    ))}
+                    
+                    <th className="py-4 px-3 text-center text-emerald-600 bg-emerald-50/50 border-l border-emerald-100 shadow-inner w-12">H</th>
+                    <th className="py-4 px-3 text-center text-amber-500 bg-amber-50/50 border-l border-amber-100 shadow-inner w-12">S/I</th>
+                    <th className="py-4 px-3 text-center text-rose-500 bg-rose-50/50 border-x border-rose-100 shadow-inner w-12">A</th>
+                    
+                    <th className="py-4 px-4 text-center border-l border-indigo-100 bg-indigo-50/50 text-indigo-600 shadow-inner sticky right-0 z-20 w-32">
+                      <MonitorPlay size={12} className="mx-auto mb-1"/> Video Dilihat
+                    </th>
+                  </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {filteredSantri.length === 0 ? <tr><td colSpan={7} className="text-center py-10 text-slate-400 font-bold">Data santri tidak ditemukan.</td></tr> : filteredSantri.map((s, i) => {
+                  {filteredSantri.length === 0 ? <tr><td colSpan={meetingCount + 6} className="text-center py-10 text-slate-400 font-bold">Data santri tidak ditemukan.</td></tr> : filteredSantri.map((s, i) => {
                     const nama = s.user?.name || s.nama || "Tanpa Nama";
-                    const noWa = s.user?.wa || s.wa;
-                    const att = attendances[s.id] || { hadir: 0, sakit: 0, izin: 0, alpa: 0 };
-                    const total = (att.hadir||0) + (att.sakit||0) + (att.izin||0) + (att.alpa||0);
+                    
+                    // KALKULASI PRESENSI BARU (I dan S digabung)
+                    let totalH = 0, totalSI = 0, totalA = 0;
+                    for (let x = 1; x <= meetingCount; x++) {
+                      const stat = attendances[`${s.id}_${x}`];
+                      if (stat === 'H') totalH++;
+                      if (stat === 'S' || stat === 'I') totalSI++;
+                      if (stat === 'A') totalA++;
+                    }
+
                     return (
                       <tr key={s.id} className="hover:bg-slate-50 transition">
-                        <td className="py-3 px-4 text-center font-bold text-slate-400 border-r border-slate-50">{i+1}</td>
-                        <td className="py-3 px-4 font-bold text-sm text-slate-800 border-r border-slate-100 flex items-center justify-between">
-                          {nama}
-                          {noWa && <a href={`https://wa.me/${noWa}`} target="_blank" rel="noreferrer" className="text-emerald-500 bg-emerald-50 p-1.5 rounded-lg hover:bg-emerald-500 hover:text-white transition cursor-pointer" title="Hubungi via WA"><MessageCircle size={14}/></a>}
+                        {/* PERBAIKAN: Data Kolom Nomor Urut */}
+                        <td className="py-3 px-4 text-center text-slate-400 text-sm font-bold border-r border-slate-50">{i + 1}</td>
+                        <td className="py-3 px-4 border-r border-slate-100 sticky left-0 bg-white shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="font-bold text-sm text-slate-800">{nama}</p>
+                              <p className="text-[10px] text-slate-400 font-medium">{s.nis || "-"}</p>
+                            </div>
+                            
+                            {/* TOMBOL WA WALI MURID */}
+                            {s.parentPhone && (
+                              <a 
+                                href={`https://wa.me/${s.parentPhone.replace(/\D/g, '').replace(/^0/, '62')}`} 
+                                target="_blank" 
+                                rel="noreferrer" 
+                                className="w-8 h-8 flex items-center justify-center bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-500 hover:text-white transition shadow-sm shrink-0 border border-emerald-100" 
+                                title={`Hubungi Wali Murid (${s.parentPhone})`}
+                              >
+                                <MessageCircle size={14}/>
+                              </a>
+                            )}
+                          </div>
                         </td>
-                        <td className="py-3 px-2 text-center bg-emerald-50/10"><input type="number" min="0" value={att.hadir || ""} onChange={e => handleAttChange(s.id, 'hadir', e.target.value)} className="w-14 p-1.5 text-center font-bold text-sm bg-white border border-emerald-200 rounded-lg outline-none focus:border-emerald-500" placeholder="0"/></td>
-                        <td className="py-3 px-2 text-center bg-amber-50/10"><input type="number" min="0" value={att.sakit || ""} onChange={e => handleAttChange(s.id, 'sakit', e.target.value)} className="w-14 p-1.5 text-center font-bold text-sm bg-white border border-amber-200 rounded-lg outline-none focus:border-amber-500" placeholder="0"/></td>
-                        <td className="py-3 px-2 text-center bg-blue-50/10"><input type="number" min="0" value={att.izin || ""} onChange={e => handleAttChange(s.id, 'izin', e.target.value)} className="w-14 p-1.5 text-center font-bold text-sm bg-white border border-blue-200 rounded-lg outline-none focus:border-blue-500" placeholder="0"/></td>
-                        <td className="py-3 px-2 text-center bg-rose-50/10"><input type="number" min="0" value={att.alpa || ""} onChange={e => handleAttChange(s.id, 'alpa', e.target.value)} className="w-14 p-1.5 text-center font-bold text-sm bg-white border border-rose-200 rounded-lg outline-none focus:border-rose-500" placeholder="0"/></td>
-                        <td className="py-3 px-6 text-center font-black text-slate-600 border-l border-slate-100 bg-slate-50/50">{total}</td>
+                        
+                        {Array.from({length: meetingCount}).map((_, x) => {
+                          const val = attendances[`${s.id}_${x + 1}`] || "";
+                          return (
+                            <td key={x} className="py-2 px-1 text-center border-r border-slate-50">
+                              <select 
+                                value={val}
+                                onChange={(e) => handleAttChange(s.id, x + 1, e.target.value)}
+                                className={`w-12 py-1.5 text-center text-xs font-bold rounded-lg outline-none border cursor-pointer appearance-none transition shadow-sm ${
+                                  val === 'H' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+                                  (val === 'S' || val === 'I') ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                                  val === 'A' ? 'bg-rose-50 border-rose-200 text-rose-700' :
+                                  'bg-white border-slate-200 text-slate-400 hover:border-emerald-300'
+                                }`}
+                              >
+                                <option value="">-</option>
+                                <option value="H">H</option>
+                                <option value="S">S</option>
+                                <option value="I">I</option>
+                                <option value="A">A</option>
+                              </select>
+                            </td>
+                          )
+                        })}
+                        
+                        <td className="py-3 px-3 text-center text-sm font-black text-emerald-600 bg-emerald-50/30 border-l border-emerald-50">{totalH}</td>
+                        <td className="py-3 px-3 text-center text-sm font-black text-amber-500 bg-amber-50/30 border-l border-amber-50">{totalSI}</td>
+                        <td className="py-3 px-3 text-center text-sm font-black text-rose-500 bg-rose-50/30 border-l border-rose-50 border-r border-slate-100">{totalA}</td>
+                        
+                        <td className="py-3 px-4 text-center bg-indigo-50/50 sticky right-0 shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.05)] border-l border-indigo-100">
+                           <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white border border-indigo-200 text-indigo-700 font-black shadow-sm text-xs">
+                             {s.watchedVideosCount || 0}
+                           </span>
+                        </td>
                       </tr>
-                  )})}
+                    )})}
                 </tbody>
               </table>
+            </div>
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest justify-center sm:justify-end">
+              <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm"></div> H: Hadir</span>
+              <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-sm"></div> S/I: Sakit / Izin</span>
+              <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm"></div> A: Alpha</span>
             </div>
           </div>
         )}
@@ -360,12 +465,12 @@ export default function ManajemenKelasAllInOne() {
                 <thead className="bg-white text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200 sticky top-0 z-10 shadow-sm">
                   <tr>
                     <th className="py-4 px-4 text-center w-10 border-r border-slate-50">No</th>
-                    <th className="py-4 px-4 border-r border-slate-100">Nama Santri</th>
+                    <th className="py-4 px-4 border-r border-slate-100 sticky left-0 bg-white z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Nama Santri</th>
                     {Array.from({length: jumlahTugas}).map((_,i) => <th key={i} className="py-4 px-2 text-center w-20">Tgs {i+1}</th>)}
                     {jumlahTugas > 1 && <th className="py-4 px-2 text-center w-20 border-x border-slate-100 bg-slate-50">Rata TGS</th>}
                     <th className="py-4 px-2 text-center w-20 border-l border-slate-100 bg-blue-50/30">UTS</th>
                     <th className="py-4 px-2 text-center w-20 border-r border-slate-100 bg-indigo-50/30">UAS</th>
-                    <th className="py-4 px-6 text-center w-32 bg-amber-50 text-amber-800 border-l border-amber-100">NILAI AKHIR</th>
+                    <th className="py-4 px-6 text-center w-32 bg-amber-50 text-amber-800 border-l border-amber-100 sticky right-0 z-20 shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)]">NILAI AKHIR</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -377,7 +482,7 @@ export default function ManajemenKelasAllInOne() {
                     return (
                       <tr key={s.id} className="hover:bg-slate-50 transition">
                         <td className="py-3 px-4 text-center text-slate-400 text-sm font-bold border-r border-slate-50">{idx + 1}</td>
-                        <td className="py-3 px-4 font-bold text-sm text-slate-800 border-r border-slate-100">{nama}</td>
+                        <td className="py-3 px-4 font-bold text-sm text-slate-800 border-r border-slate-100 sticky left-0 bg-white shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">{nama}</td>
                         
                         {Array.from({length: jumlahTugas}).map((_,i) => {
                           const val = grades[s.id]?.[`tugas${i+1}`];
@@ -411,8 +516,8 @@ export default function ManajemenKelasAllInOne() {
                           })()}
                         </td>
                         
-                        <td className="py-3 px-6 text-center bg-amber-50/40 border-l border-amber-100">
-                          <span className={`px-3 py-1.5 rounded-lg border font-black text-sm shadow-sm inline-block min-w-[3rem] ${nilaiAkhir >= kkm ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : 'bg-rose-100 text-rose-700 border-rose-300'}`}>{nilaiAkhir || 0}</span>
+                        <td className="py-3 px-6 text-center bg-amber-50/80 border-l border-amber-100 sticky right-0 shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                          <span className={`px-3 py-1.5 rounded-lg border font-black text-sm shadow-sm inline-block min-w-[3rem] ${nilaiAkhir >= kkm ? 'bg-white text-emerald-700 border-emerald-200' : 'bg-rose-100 text-rose-700 border-rose-300'}`}>{nilaiAkhir || 0}</span>
                         </td>
                       </tr>
                     );
@@ -450,7 +555,7 @@ export default function ManajemenKelasAllInOne() {
           </div>
         )}
 
-        {/* TAB SERTIFIKAT (SUPER SIMPLE: HANYA UPLOAD LINK) */}
+        {/* TAB SERTIFIKAT */}
         {activeTab === 'SERTIFIKAT' && (
           <div className="bg-white rounded-[2rem] shadow-sm border border-indigo-100 overflow-hidden flex flex-col min-h-[500px]">
             <div className="p-6 border-b border-indigo-100 bg-indigo-50/50 flex flex-wrap justify-between items-center gap-4">

@@ -45,7 +45,7 @@ export async function getSiswaDB() {
       ortu: s.parentName || "-",
       telepon: s.parentPhone || "-",
       alamat: s.address || "-",
-      status: s.status || "Aktif",
+      status: s.status || "AKTIF",
       kesibukan: s.kesibukan || "Santri Reguler",
     }));
 
@@ -94,7 +94,6 @@ export async function saveSiswaDB(data: any) {
             enrollYear: enrollYearInt,
             status: statusEnum,
             parentPhone: data.telepon || null,
-            // Baris kesibukan DIHAPUS karena tidak ada di database schema
           }
         });
         // Update Nama User
@@ -139,7 +138,6 @@ export async function saveSiswaDB(data: any) {
             enrollYear: enrollYearInt,
             status: statusEnum,
             parentPhone: data.telepon || null,
-            // Baris kesibukan DIHAPUS karena tidak ada di database schema
           }
         });
       });
@@ -184,7 +182,7 @@ export async function deleteSiswaMassalDB(studentProfileIds: string[]) {
     const profiles = await prisma.studentProfile.findMany({
       where: { 
         id: { in: studentProfileIds },
-        tenantId: tenantId // Validasi ganda
+        tenantId: tenantId 
       },
       select: { userId: true }
     });
@@ -215,7 +213,7 @@ export async function luluskanSiswaMassalDB(studentProfileIds: string[]) {
         id: { in: studentProfileIds },
         tenantId: tenantId 
       },
-      data: { status: "LULUS" } // <--- UBAH MENJADI HURUF BESAR SEMUA
+      data: { status: "LULUS" } 
     });
 
     revalidatePath("/admin/students");
@@ -261,63 +259,87 @@ export async function updateAksesSiswaDB(studentProfileId: string, newEmail: str
 }
 
 // ------------------------------------------------------------------
-// 7. IMPORT SISWA MASSAL (CSV)
+// 7. IMPORT SISWA MASSAL (CSV) DENGAN LAPORAN
 // ------------------------------------------------------------------
 export async function importSiswaMassalDB(dataArray: any[]) {
   try {
     const { tenantId } = await getAuthContext();
-
-    // Gunakan loop karena kita harus melakukan hashing password per baris
-    // dan membuat record di 2 tabel berbeda (User & Profile)
-    for (const data of dataArray) {
-      // Lewati jika data kosong atau tidak valid
-      if (!data.NIS || !data.Nama) continue;
-
-      const autoEmail = data.Email || `santri.${data.NIS}@sekolah.id`;
-      const defaultPassword = data.Password || data.NIS.toString();
-      const hashedPassword = await bcrypt.hash(defaultPassword, 10);
-      // 3. Persiapan Data (Konversi format agar sesuai schema Prisma)
-    const genderEnum = data.jk === "L" || data.jk === "LAKI_LAKI" ? "LAKI_LAKI" : "PEREMPUAN";
-    const enrollYearInt = parseInt(data.kelas) || new Date().getFullYear();
     
-    // TAMBAHKAN BARIS INI: Paksa status menjadi huruf besar semua
-    const statusEnum = data.status ? data.status.toUpperCase() : "AKTIF";
+    let sukses = 0;
+    let dilewati = 0;
 
-      // Cek duplikasi (lewati jika sudah ada)
-      const existingUser = await prisma.user.findUnique({ where: { email: autoEmail } });
-      const existingNis = await prisma.studentProfile.findFirst({ where: { tenantId, nis: data.NIS.toString() } });
-      
-      if (!existingUser && !existingNis) {
-        await prisma.$transaction(async (tx: any) => {
-          const newUser = await tx.user.create({
-            data: {
-              email: autoEmail,
-              name: data.Nama,
-              password: hashedPassword,
-              role: "SANTRI",
-              tenantId: tenantId,
-            }
-          });
+    for (const data of dataArray) {
+      // 1. Ambil data dengan aman (Kebal huruf besar/kecil)
+      const nis = data.NIS || data.nis || data.Nis || data["NIS "];
+      const nama = data.NamaLengkap || data.Nama || data.nama || data.name;
 
-          await tx.studentProfile.create({
-            data: {
-              userId: newUser.id,
-              tenantId: tenantId,
-              nis: data.NIS.toString(),
-              gender: genderEnum,
-              enrollYear: enrollYearInt,
-              status: data.Status || "Aktif",
-              parentName: data.NamaWali || null,
-              parentPhone: data.NoHP || null,
-              address: data.Alamat || null,
-            }
-          });
-        });
+      if (!nis || !nama) {
+        dilewati++;
+        continue; // Lewati jika NIS atau Nama kosong
       }
+
+      const strNis = nis.toString().trim();
+      const autoEmail = data.Email || data.email || `santri.${strNis}@sekolah.id`;
+      
+      // 2. Cek apakah Email atau NIS sudah terdaftar
+      const existingUser = await prisma.user.findUnique({ where: { email: autoEmail } });
+      const existingNis = await prisma.studentProfile.findFirst({ where: { tenantId, nis: strNis } });
+      
+      // Jika sudah ada, lewati agar tidak error
+      if (existingUser || existingNis) {
+        dilewati++;
+        continue;
+      }
+
+      // 3. Persiapan Data
+      const defaultPassword = data.Password || data.password || strNis;
+      const hashedPassword = await bcrypt.hash(defaultPassword.toString(), 10);
+      
+      const genderRaw = data.JK || data.jk || data.Gender || "L";
+      const genderEnum = genderRaw.toUpperCase().startsWith("L") ? "LAKI_LAKI" : "PEREMPUAN";
+      
+      const enrollYearInt = parseInt(data.Kelas || data.kelas) || new Date().getFullYear();
+      
+      const statusRaw = data.Status || data.status || "AKTIF";
+      const statusEnum = statusRaw.toUpperCase();
+
+      // 4. Simpan ke Database
+      await prisma.$transaction(async (tx: any) => {
+        const newUser = await tx.user.create({
+          data: {
+            email: autoEmail,
+            name: nama,
+            password: hashedPassword,
+            role: "SANTRI",
+            tenantId: tenantId,
+          }
+        });
+
+        await tx.studentProfile.create({
+          data: {
+            userId: newUser.id,
+            tenantId: tenantId,
+            nis: strNis,
+            gender: genderEnum,
+            enrollYear: enrollYearInt,
+            status: statusEnum, 
+            parentName: data.NamaWali || data.namawali || null,
+            parentPhone: data.NoHP || data.nohp || data.telepon ? String(data.NoHP || data.nohp || data.telepon) : null,
+            address: data.Alamat || data.alamat || null,
+          }
+        });
+      });
+      
+      sukses++; // Hitung data yang berhasil masuk
     }
 
     revalidatePath("/admin/students");
-    return { success: true };
+    
+    // Kembalikan pesan yang jelas ke tampilan depan
+    return { 
+      success: true, 
+      message: `Selesai! ${sukses} santri berhasil ditambahkan. ${dilewati} data dilewati karena duplikat atau format tidak lengkap.` 
+    };
   } catch (error: any) {
     console.error("Gagal import massal:", error);
     return { success: false, error: "Terjadi kesalahan saat import data: " + error.message };

@@ -53,6 +53,7 @@ model User {
   courses         Course[]         @relation("CourseTeacher")
   enrollments     Enrollment[]
   attendances     Attendance[]
+  materialProgress MaterialProgress[]
   studentProfile  StudentProfile? 
   teacherProfile  TeacherProfile?
 }
@@ -233,6 +234,7 @@ model LearningMaterial {
   fileUrl     String?  
   isPublished Boolean   @default(true)
   order       Int       @default(0)
+  progress         MaterialProgress[]
   
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -418,4 +420,23 @@ model Buku {
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+// --- FITUR PROGRESS MATERI SANTRI --- //
+
+model MaterialProgress {
+  id          String   @id @default(cuid())
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  materiId    String
+  material    LearningMaterial @relation(fields: [materiId], references: [id], onDelete: Cascade)
+  
+  classRoomId String
+
+  createdAt   DateTime @default(now())
+
+  // Mencegah santri merekam progress ganda di materi yang sama
+  @@unique([userId, materiId])
 }

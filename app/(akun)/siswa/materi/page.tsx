@@ -3,14 +3,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { 
   BookOpen, PlayCircle, Video, Lock, CheckCircle2, 
-  FileText, Download, Play, Clock, 
+  FileText, Play, Clock, 
   Users, ArrowLeft, Loader2, Link as LinkIcon, ExternalLink,
-  Search, Star, X
+  Search, X
 } from "lucide-react";
-import { getMateriSantriDB, markAttendanceSantriDB } from "./actions";
+import { getMateriSantriDB, markAttendanceSantriDB, markMaterialCompletedDB } from "./actions";
 import { createPortal } from "react-dom";
 
-// Fungsi Helper untuk mengambil ID Video dari Link YouTube
 const getYouTubeId = (url: string) => {
   if (!url) return null;
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -19,20 +18,14 @@ const getYouTubeId = (url: string) => {
 };
 
 export default function MateriBelajarSantri() {
-  // ================= STATE INTERAKSI UI =================
   const [selectedClass, setSelectedClass] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState<"IN_PROGRESS" | "COMPLETED">("IN_PROGRESS");
   const [searchQuery, setSearchQuery] = useState("");
-  
-  // State Baru untuk mengontrol Pop Screen Video Cinema Mode
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
 
-  // ================= STATE DATA DATABASE =================
   const [isLoading, setIsLoading] = useState(true);
   const [enrolledClasses, setEnrolledClasses] = useState<any[]>([]);
   const [allMateri, setAllMateri] = useState<any[]>([]);
-  
-  // State untuk melacak materi mana saja yang sudah diselesaikan santri
   const [completedMaterials, setCompletedMaterials] = useState<string[]>([]);
 
   const gradients = [
@@ -44,8 +37,6 @@ export default function MateriBelajarSantri() {
 
   useEffect(() => {
     fetchData();
-    const savedProgress = localStorage.getItem('santri_material_progress');
-    if (savedProgress) setCompletedMaterials(JSON.parse(savedProgress));
   }, []);
 
   const fetchData = async () => {
@@ -54,15 +45,17 @@ export default function MateriBelajarSantri() {
     if (res.success) {
       setEnrolledClasses(res.enrolledClasses || []);
       setAllMateri(res.data || []);
+      if (res.completedMaterials) {
+         setCompletedMaterials(res.completedMaterials);
+      }
     }
     setIsLoading(false);
   };
 
-  // Fungsi saat Santri mengklik "Sudah Melihat Materi"
   const handleMarkAsCompleted = async (materiId: string, classRoomId: string) => {
     const newProgress = [...completedMaterials, materiId];
     setCompletedMaterials(newProgress);
-    localStorage.setItem('santri_material_progress', JSON.stringify(newProgress));
+    await markMaterialCompletedDB(materiId, classRoomId);
     await markAttendanceSantriDB(classRoomId);
   };
 
@@ -93,7 +86,6 @@ export default function MateriBelajarSantri() {
 
     return (
       <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-12">
-        {/* Header & Tabs dengan Efek Interaktif Sempurna */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 bg-white p-8 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
           <div>
             <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3 mb-2">
@@ -135,8 +127,8 @@ export default function MateriBelajarSantri() {
           ) : (
             displayClasses.map((cls, idx) => {
               const classMats = allMateri.filter(m => m.classRoomId === cls.id);
-              const firstVideo = classMats.find(m => getYouTubeId(m.fileUrl));
-              const ytCoverId = firstVideo ? getYouTubeId(firstVideo.fileUrl) : null;
+              const firstVideo = classMats.find(m => getYouTubeId(m.youtubeLink) || getYouTubeId(m.fileUrl));
+              const ytCoverId = firstVideo ? (getYouTubeId(firstVideo.youtubeLink) || getYouTubeId(firstVideo.fileUrl)) : null;
               const coverImgUrl = ytCoverId ? `https://img.youtube.com/vi/${ytCoverId}/hqdefault.jpg` : null;
               
               const defaultColor = gradients[idx % gradients.length];
@@ -192,7 +184,7 @@ export default function MateriBelajarSantri() {
     );
   }
 
-  // --- VIEW 2: INSIDE CLASS (LEARNING PATH PATHWAY) ---
+  // --- VIEW 2: INSIDE CLASS (LEARNING PATH) ---
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-in slide-in-from-bottom-8 duration-500 pb-12">
       
@@ -213,7 +205,6 @@ export default function MateriBelajarSantri() {
         
         {/* KOLOM KIRI (70%): TIMELINE BERKAS DAN MATERI */}
         <div className="xl:col-span-2 space-y-6">
-          
           <div className={`bg-gradient-to-br ${selectedClass.coverColor} rounded-[2rem] p-8 md:p-10 text-white shadow-lg relative overflow-hidden`}>
             <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
             <div className="relative z-10">
@@ -237,7 +228,6 @@ export default function MateriBelajarSantri() {
 
           <div className="space-y-6">
             <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
-              
               <div className="flex gap-4 items-start mb-8 pb-6 border-b border-slate-100">
                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 font-black text-lg bg-indigo-50 text-indigo-600">1</div>
                  <div>
@@ -252,20 +242,21 @@ export default function MateriBelajarSantri() {
                 ) : (
                   filteredMateri.map((materi: any, matIdx: number) => {
                     const fileType = materi.tipe?.toUpperCase() || "PDF";
-                    const ytId = getYouTubeId(materi.fileUrl);
+                    
+                    // PERBAIKAN: Fokus deteksi YouTube Link secara spesifik
+                    const ytId = getYouTubeId(materi.youtubeLink);
                     
                     const isCompleted = completedMaterials.includes(materi.id);
                     const isUnlocked = matIdx === 0 || completedMaterials.includes(filteredMateri[matIdx - 1].id);
                     const isLocked = !isUnlocked;
                     
                     let IconComponent = FileText;
-                    if (fileType === "VIDEO") IconComponent = PlayCircle;
-                    if (fileType === "LINK") IconComponent = LinkIcon;
+                    if (fileType === "VIDEO" || ytId) IconComponent = PlayCircle;
+                    else if (fileType === "LINK") IconComponent = LinkIcon;
                     
                     return (
                       <div key={materi.id} className={`relative pl-8 md:pl-10 transition-all duration-500 ${isLocked ? 'opacity-30 grayscale pointer-events-none select-none' : ''}`}>
                         
-                        {/* Dot Timeline */}
                         <div className={`absolute -left-[17px] top-4 w-8 h-8 rounded-full border-4 flex items-center justify-center z-10 transition-all ${
                           isCompleted ? 'bg-emerald-500 border-emerald-100' : 
                           isUnlocked ? 'bg-indigo-600 border-indigo-100 shadow-[0_0_15px_rgba(79,70,229,0.5)]' : 
@@ -274,7 +265,6 @@ export default function MateriBelajarSantri() {
                           {isCompleted ? <CheckCircle2 size={14} className="text-white" strokeWidth={3}/> : <div className="w-2.5 h-2.5 bg-white rounded-full"></div>}
                         </div>
                         
-                        {/* Content Card */}
                         <div className={`p-5 rounded-2xl border transition-all ${
                           isCompleted ? 'bg-white border-slate-200 hover:border-indigo-300' :
                           isUnlocked ? 'bg-indigo-50/30 border-indigo-200 ring-1 ring-indigo-100 shadow-sm' : 
@@ -297,7 +287,7 @@ export default function MateriBelajarSantri() {
                                     isCompleted ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
                                     'bg-slate-50 text-slate-600 border-slate-200'
                                   }`}>
-                                    {fileType}
+                                    {materi.youtubeLink && materi.fileUrl ? "VIDEO & MODUL" : fileType}
                                   </span>
                                   <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
                                     <Clock size={12}/> {new Date(materi.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
@@ -310,10 +300,10 @@ export default function MateriBelajarSantri() {
                                   <p className="text-xs font-medium text-slate-500 mb-4 line-clamp-2">{materi.deskripsi}</p>
                                 )}
 
-                                {/* Jika Youtube, Tampilkan Thumbnail Besar */}
+                                {/* Thumbnail Video Utama */}
                                 {ytId && isUnlocked && (
                                   <div 
-                                    onClick={() => setActiveVideoId(ytId)} // Klik thumbnail membuka Pop Screen Cinema
+                                    onClick={() => setActiveVideoId(ytId)}
                                     className="relative w-full max-w-sm rounded-xl overflow-hidden mb-4 shadow-sm border border-slate-200 cursor-pointer group/thumb"
                                   >
                                     <img src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`} alt="Video Thumbnail" className="w-full h-auto object-cover aspect-video group-hover/thumb:scale-105 transition duration-500" />
@@ -323,21 +313,26 @@ export default function MateriBelajarSantri() {
                                   </div>
                                 )}
 
+                                {/* PERBAIKAN: Tombol-Tombol Terpisah & Bisa Muncul Bersamaan */}
                                 <div className="flex flex-wrap items-center gap-3 mt-2">
-                                  {/* Pembeda Aksi Tombol Tonton Video vs Link Berkas */}
-                                  {fileType === "VIDEO" && ytId ? (
+                                  
+                                  {/* 1. TOMBOL VIDEO */}
+                                  {ytId && (
                                     <button 
                                       onClick={() => setActiveVideoId(ytId)}
                                       className="flex items-center justify-center gap-2 px-6 py-2.5 text-xs font-bold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-200 cursor-pointer"
                                     >
                                       <Play size={14} /> {isCompleted ? 'Tonton Ulang Video' : 'Mulai Tonton Video'}
                                     </button>
-                                  ) : (
+                                  )}
+
+                                  {/* 2. TOMBOL BERKAS/PDF */}
+                                  {materi.fileUrl && materi.fileUrl.length > 5 && (
                                     <a 
                                       href={materi.fileUrl.startsWith('http') ? materi.fileUrl : `https://${materi.fileUrl}`} 
                                       target="_blank" rel="noreferrer" 
                                       className={`flex items-center justify-center gap-2 px-6 py-2.5 text-xs font-bold rounded-xl shadow-sm transition-colors ${
-                                        isCompleted ? 'bg-slate-100 text-slate-600 hover:bg-slate-200' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
+                                        isCompleted ? 'bg-slate-100 text-slate-600 hover:bg-slate-200' : 'bg-slate-800 text-white hover:bg-black shadow-slate-200'
                                       }`}
                                     >
                                       <ExternalLink size={14}/>
@@ -345,17 +340,17 @@ export default function MateriBelajarSantri() {
                                     </a>
                                   )}
 
-                                  {/* Tombol Selesai (Memicu Presensi Admin) */}
+                                  {/* 3. TOMBOL SELESAI */}
                                   {!isCompleted && !isLocked && (
                                     <button 
                                       onClick={() => handleMarkAsCompleted(materi.id, selectedClass.id)}
                                       className="flex items-center justify-center gap-2 px-6 py-2.5 text-xs font-bold rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-500 hover:text-white transition-colors cursor-pointer"
                                     >
-                                      <CheckCircle2 size={16}/> Selesaikan & Catat Kehadiran
+                                      <CheckCircle2 size={16}/> Selesaikan & Lanjut
                                     </button>
                                   )}
-                                </div>
 
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -387,10 +382,8 @@ export default function MateriBelajarSantri() {
 
       </div>
 
-      {/* ================= POP SCREEN CINEMA MODAL VIDEO BOX ================= */}
       {activeVideoId && createPortal(
         <div className="fixed inset-0 z-[255] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 md:p-12 animate-in fade-in duration-300">
-          {/* Tombol Close Terapung */}
           <button 
             onClick={() => setActiveVideoId(null)}
             className="fixed top-6 right-6 p-3 bg-white/10 hover:bg-red-600 border border-white/20 hover:border-red-500 text-white rounded-full transition-all duration-300 cursor-pointer shadow-xl z-[260]"
@@ -398,8 +391,6 @@ export default function MateriBelajarSantri() {
           >
             <X size={24} />
           </button>
-
-          {/* Kotak Layar Cinema */}
           <div className="w-full max-w-5xl bg-black rounded-3xl overflow-hidden shadow-2xl border border-slate-800/60 aspect-video relative">
             <iframe 
               src={`https://www.youtube.com/embed/${activeVideoId}?autoplay=1&rel=0`}
